@@ -63,7 +63,7 @@ export const DataBarChart: React.FC<{
   }
 
   // Get unique data keys from values array
-  const dataKeys = Array.from(new Set(data.values.map(series => series.label)));
+  const dataKeys = data?.values ? Array.from(new Set(data?.values?.map(series => series.label))) : [];
 
   // Transform the data into the format Recharts expects
   // const transformedData = data.labels.map((label, index) => ({
