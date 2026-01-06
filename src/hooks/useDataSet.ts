@@ -1,8 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
-import { AddDataSource, AddDataSourceResponse, DataSources, GetDataSourcesResponse, GetTablesList, GetTablesListResponse, UploadSpreadSheetResponse } from "../interfaces/dataSourceInterface";
+import { AddDataSource, AddDataSourceResponse, DataSources, GetDataSourcesResponse, GetTablesList, GetTablesListResponse, UploadSpreadSheetResponse, SuggestQuestionsResponse } from "../interfaces/dataSourceInterface";
 import { AxiosError } from 'axios';
 import { ApiResponse } from "../interfaces/globalInterfaces";
-import { addDataSource, getDataSources, getDataSourceTables, uploadSpreadsheet, uploadDocument } from "../zustand/apis/dataSourceApi";
+import { addDataSource, getDataSources, getDataSourceTables, uploadSpreadsheet, uploadDocument, suggestQuestions, deleteDataSource } from "../zustand/apis/dataSourceApi";
 import dataSetStore from '../zustand/stores/dataSetStore';
 // import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -107,3 +107,28 @@ export const useGetTablesMutation = () => {
   });
 }
 
+export const useSuggestQuestionsMutation = () => {
+  return useMutation<ApiResponse<SuggestQuestionsResponse>, AxiosError<ErrorResponse>, number>({
+    mutationFn: suggestQuestions,
+    onSuccess: (response) => {
+      console.log(response.data.questions);
+    },
+    onError: (error) => {
+      console.log(error.response?.data.message);
+    },
+  });
+}
+export const useDeleteDataSourceMutation = () => {
+  const deleteDataSet = dataSetStore((state) => state.deleteDataSet);
+  return useMutation<ApiResponse<{ id: number }>, AxiosError<ErrorResponse>, number>({
+    mutationFn: deleteDataSource,
+    onSuccess: (response) => {
+      deleteDataSet(response.data.id);
+      toast.success('Data source deleted successfully');
+    },
+    onError: (error) => {
+      console.log(error.response?.data.message);
+      toast.error(error.response?.data.message || 'Failed to delete data source');
+    },
+  });
+}

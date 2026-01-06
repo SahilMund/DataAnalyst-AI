@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { BiSend } from 'react-icons/bi';
-import { BsStars } from 'react-icons/bs';
+import { BsStars, BsDownload } from 'react-icons/bs';
+import { MdCode, MdOutlineAnalytics } from 'react-icons/md';
 import Steps from '../components/steps/Steps';
 import SelectDataset from '../components/SelectDataset';
 import Avatar from 'react-avatar';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useStreamChat } from '../hooks/useChat';
 import { ConversationMessages, ProcessingMessage } from '../interfaces/chatInterface';
 import TypewriterWithHighlight from '../components/TypewriterWithHighlight';
@@ -12,12 +13,35 @@ import ChartComponent from '../components/ChartComponent';
 // import { toast } from 'react-toastify';
 import dataSetStore from '../zustand/stores/dataSetStore';
 
+const SqlToggle = ({ sql }: { sql?: string }) => {
+  const [show, setShow] = useState(false);
+  if (!sql) return null;
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setShow(!show)}
+        className="flex items-center text-[10px] font-bold uppercase tracking-widest text-navy-400 hover:text-navy-600 transition-colors"
+      >
+        <MdCode className="mr-1 text-sm" />
+        {show ? 'Hide SQL Query' : 'View SQL Query'}
+      </button>
+      {show && (
+        <div className="mt-2 p-3 bg-navy-900 rounded-lg text-blue-100 text-[11px] font-mono leading-relaxed border border-navy-800 shadow-inner overflow-x-auto">
+          <code>{sql}</code>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Chat() {
 
   // const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [question, setQuestion] = useState('');
   const [datasetType, setDatasetType] = useState<string>();
   const [messages, setMessages] = useState<ConversationMessages[]>([]);
+  const navigate = useNavigate();
   const [processingMessages, setProcessingMessages] = useState<ProcessingMessage[]>([]);
 
   const tables = dataSetStore((state) => state.tables);
@@ -51,7 +75,24 @@ export default function Chat() {
         if (message.source_documents) {
           ai_answer["source_documents"] = message.source_documents
         }
+        if (message.sql_query) {
+          ai_answer["sql_query"] = message.sql_query
+        }
       })
+
+      // Check for navigation command
+      const navMatch = ai_answer.answer?.match(/NAVIGATE:\s*(\/\S+)/);
+      if (navMatch) {
+        const path = navMatch[1];
+        // Clean the answer to remove the command from the UI
+        ai_answer.answer = ai_answer.answer.replace(/NAVIGATE:\s*\/\S+/, "").trim();
+
+        // Navigate after a delay so the user can read the message
+        setTimeout(() => {
+          navigate(path);
+        }, 2000);
+      }
+
       setMessages((prevMessages) => [
         ...prevMessages,
         {
@@ -67,7 +108,7 @@ export default function Chat() {
       setTables([filteredDataSet[0]?.table_name || ''])
       setDatasetType(filteredDataSet[0]?.type)
     }
-  }, [data_source_id])
+  }, [data_source_id, dataSets])
 
 
   const askQuestion = () => {
@@ -76,9 +117,14 @@ export default function Chat() {
     setProcessingMessages([]);
     // Clear the question input after sending
     setQuestion('');
+
+    // Determine the actual type from the store if state is not yet ready
+    const currentDataSet = dataSets?.find(d => d.id === Number(data_source_id));
+    const typeToSend = datasetType || currentDataSet?.type || 'url';
+
     sendMessage({
       question: question,
-      type: datasetType || 'url',
+      type: typeToSend,
       conversaction_id: Number(conversation_id),
       dataset_id: Number(data_source_id),
       selected_tables: tables,
@@ -133,13 +179,36 @@ export default function Chat() {
                         </div>
                       )}
 
+                      {message.ai_answer.sql_query && (
+                        <SqlToggle sql={message.ai_answer.sql_query} />
+                      )}
+
                       {
                         message?.ai_answer?.formatted_data_for_visualization && (
-                          <div className="w-full h-[400px]">
-                            <ChartComponent
-                              type={message?.ai_answer?.recommended_visualization || ""}
-                              data={message?.ai_answer?.formatted_data_for_visualization}
-                            />
+                          <div className="mt-6 border border-blue-100 rounded-xl overflow-hidden bg-white shadow-sm">
+                            <div className="bg-blue-gray-50/50 px-4 py-2 border-b border-blue-100 flex justify-between items-center">
+                              <span className="text-[10px] font-bold text-navy-400 uppercase tracking-widest flex items-center">
+                                <MdOutlineAnalytics className="mr-1 text-sm text-blue-500" />
+                                Data Visualization
+                              </span>
+                              <button
+                                onClick={() => {
+                                  // Simple export logic - alert for now
+                                  alert("Exporting visualization data as JSON...");
+                                  console.log(message.ai_answer?.formatted_data_for_visualization);
+                                }}
+                                className="text-navy-400 hover:text-blue-500 transition-colors"
+                                title="Export Data"
+                              >
+                                <BsDownload className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <div className="w-full h-[400px] p-4">
+                              <ChartComponent
+                                type={message?.ai_answer?.recommended_visualization || ""}
+                                data={message?.ai_answer?.formatted_data_for_visualization}
+                              />
+                            </div>
                           </div>
                         )
                       }
@@ -149,7 +218,25 @@ export default function Chat() {
                 </div>
               ))
             ) : (
-              <SelectDataset />
+              <SelectDataset
+                onSuggestClick={(q) => {
+                  setQuestion(q);
+                  setMessages((prev) => [...prev, { user_question: q }]);
+                  setProcessingMessages([]);
+
+                  const currentDataSet = dataSets?.find(d => d.id === Number(data_source_id));
+                  const typeToSend = datasetType || currentDataSet?.type || 'url';
+
+                  sendMessage({
+                    question: q,
+                    type: typeToSend,
+                    conversaction_id: Number(conversation_id),
+                    dataset_id: Number(data_source_id),
+                    selected_tables: tables,
+                    llm_model: selectedModel
+                  });
+                }}
+              />
             )}
           </div>
           {/* textarea div */}

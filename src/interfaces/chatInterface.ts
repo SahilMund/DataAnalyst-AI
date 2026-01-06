@@ -52,7 +52,8 @@ export interface AiAnswer {
   answer?: string,
   formatted_data_for_visualization?: object[],
   recommended_visualization?: string,
-  source_documents?: any[]
+  source_documents?: any[],
+  sql_query?: string
 }
 export interface ConversationMessages {
   user_question?: string,

@@ -39,19 +39,19 @@ const getAuthHeader = (token?: string): AxiosRequestConfig => {
   return {};
 };
 
-export const get = async <T>(url: string, token?: string, ): Promise<T> => {
+export const get = async <T>(url: string): Promise<T> => {
   const user = getUser();
   const config = getAuthHeader(user?.access_token);
-  const response = await apiClient.get<T>(url,createAxiosConfig(config));
+  const response = await apiClient.get<T>(url, createAxiosConfig(config));
   return response.data;
 };
 
-export const post = async <T>(url: string, data?: any, config?:any): Promise<T> => {
+export const post = async <T>(url: string, data?: any, config?: any): Promise<T> => {
   const user = getUser();
-  if(config){
+  if (config) {
     config.headers["Authorization"] = user?.access_token;
-  }else{
-   config = getAuthHeader(user?.access_token);
+  } else {
+    config = getAuthHeader(user?.access_token);
   }
   const response = await apiClient.post<T>(url, data, config);
   return response.data;
@@ -64,18 +64,19 @@ export const put = async <T>(url: string, data: any, token?: string): Promise<T>
 };
 
 export const del = async <T>(url: string, token?: string): Promise<T> => {
-  const config = getAuthHeader(token);
-  const response = await apiClient.delete<T>(url, config);
+  const user = getUser();
+  const config = getAuthHeader(user?.access_token || token);
+  const response = await apiClient.delete<T>(url, createAxiosConfig(config));
   return response.data;
 };
 
 export const postStream = async <T>(
-  url: string, 
-  data: any, 
+  url: string,
+  data: any,
   onDataChunk: (chunk: any) => void
 ): Promise<T> => {
   const user = getUser();
-  
+
   const streamConfig: AxiosRequestConfig = {
     headers: {
       Authorization: `Bearer ${user?.access_token}`,

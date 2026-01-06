@@ -13,11 +13,13 @@ import uuid
 from app.api.validators.data_source_validator import (
     GetSourceTable, AddDataSource)
 from app.utils.response_utils import create_response
+from app.config.llm_config import LLM
+import json
 
 # Set up logging
 logger = get_logger(__name__)
 vector_db = VectorDB()
-
+ 
 
 async def upload_spreadsheet(id: int, file: UploadFile, db: DB) -> JSONResponse:
     buffer = None
@@ -309,3 +311,123 @@ async def get_source_tables(source: GetSourceTable) -> JSONResponse:
     finally:
         if 'engine' in locals():
             db.engine.dispose()
+
+
+async def suggest_questions(source_id: int, db: DB) -> JSONResponse:
+    try:
+        with db.session() as session:
+            data_source = session.execute(select(DataSources).where(
+                DataSources.id == source_id)).scalar_one_or_none()
+
+            if not data_source:
+                return JSONResponse(status_code=404, content=create_response(
+                    status_code=404,
+                    message="Data source not found",
+                    data={}
+                ))
+
+            schema_info = ""
+            if data_source.type in ['spreadsheet', 'url']:
+                # For spreadsheets or SQL, get the table schema
+                target_db = db
+                if data_source.type == 'url':
+                    target_db = DB(data_source.connection_url)
+                
+                table_names = [data_source.name if data_source.type == 'url' else data_source.table_name]
+                schema = target_db.get_schemas(table_names)
+                schema_info = f"Database Schema: {str(schema)}"
+            else:
+                # For documents, we don't have a fixed schema, but we know the name
+                schema_info = f"Document Name: {data_source.name}. This is a text/PDF document."
+
+            # Initialize LLM
+            llm_instance = LLM()
+            # use a fast model for suggestions
+            model = llm_instance.groq("llama-3.3-70b-versatile")
+
+            prompt = f"""
+            You are LUMIN, an expert data analyst. Based on the following information about a dataset, suggest 4 interesting and diverse questions a user might want to ask to gain insights.
+            
+            {schema_info}
+            
+            Return the response as a JSON list of strings only. No other text.
+            Example: ["What is the total sales by month?", "Who is the top performing employee?", ...]
+            """
+            
+            response = model.invoke(prompt)
+            content = response.content.strip()
+            
+            # Basic cleaning if AI includes markdown blocks
+            if content.startswith("```json"):
+                content = content.replace("```json", "").replace("```", "").strip()
+            elif content.startswith("```"):
+                content = content.replace("```", "").strip()
+            
+            try:
+                questions = json.loads(content)
+            except:
+                # Fallback if AI fails to return valid JSON
+                questions = [
+                    "Tell me more about this data.",
+                    "What are the main trends here?",
+                    "Give me a summary of everything.",
+                    "Show me some interesting patterns."
+                ]
+
+            return JSONResponse(status_code=200, content=create_response(
+                status_code=200,
+                message="Suggested questions generated",
+                data={"questions": questions}
+            ))
+
+    except Exception as e:
+        logger.exception(f"Error suggesting questions: {str(e)}")
+        return JSONResponse(status_code=500, content=create_response(
+            status_code=500,
+            message="Failed to generate suggestions",
+            data={"error": str(e)}
+        ))
+
+
+async def delete_datasource(source_id: int, user_id: int, db: DB) -> JSONResponse:
+    try:
+        with db.session() as session:
+            # 1. Fetch data source
+            data_source = session.execute(select(DataSources).where(
+                DataSources.id == source_id,
+                DataSources.user_id == user_id
+            )).scalar_one_or_none()
+
+            if not data_source:
+                return JSONResponse(status_code=404, content=create_response(
+                    status_code=404,
+                    message="Data source not found",
+                    data={}
+                ))
+
+            # 2. Cleanup underlying storage
+            if data_source.type == 'spreadsheet':
+                if data_source.table_name:
+                    db.drop_table(data_source.table_name)
+            elif data_source.type == 'document':
+                if data_source.table_name:
+                    vector_db.delete_collection(data_source.table_name)
+            # For 'url' (SQL), we don't drop the user's external database tables!
+
+            # 3. Delete Metadata
+            session.delete(data_source)
+            session.commit()
+
+            return JSONResponse(status_code=200, content=create_response(
+                status_code=200,
+                message="Data source deleted successfully",
+                data={"id": source_id}
+            ))
+
+    except Exception as e:
+        logger.exception(f"Error deleting data source: {str(e)}")
+        return JSONResponse(status_code=500, content=create_response(
+            status_code=500,
+            message="Failed to delete data source",
+            data={"error": str(e)}
+        ))

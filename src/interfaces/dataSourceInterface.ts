@@ -1,5 +1,5 @@
 export interface DataSources {
-  id: number | string;
+  id: number;
   name: string;
   type: string;
   connection_url?: string;
@@ -41,4 +41,8 @@ export interface GetTablesList {
 }
 export interface GetTablesListResponse {
   tables: string[]
+}
+
+export interface SuggestQuestionsResponse {
+  questions: string[]
 }

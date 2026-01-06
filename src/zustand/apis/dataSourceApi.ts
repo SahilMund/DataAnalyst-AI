@@ -1,16 +1,21 @@
 import { DATA_SOURCE_ENDPOINTS } from './endPoints';
-import { get, post } from './apiClient';
+import { get, post, del } from './apiClient';
 import {
   GetDataSourcesResponse,
   UploadSpreadSheetResponse,
   AddDataSource,
   AddDataSourceResponse,
   GetTablesList,
-  GetTablesListResponse
+  GetTablesListResponse,
+  SuggestQuestionsResponse
 } from '../../interfaces/dataSourceInterface';
 import { ApiResponse } from '../../interfaces/globalInterfaces';
 
 type ApiFunction<TInput, TOutput> = (data: TInput) => Promise<ApiResponse<TOutput>>;
+
+export const suggestQuestions: ApiFunction<number, SuggestQuestionsResponse> = async (source_id) => {
+  return await get(DATA_SOURCE_ENDPOINTS.SUGGEST_QUESTIONS(source_id));
+};
 
 export const uploadSpreadsheet: ApiFunction<File, UploadSpreadSheetResponse> = async (file) => {
   const formData = new FormData();
@@ -36,4 +41,8 @@ export const getDataSources: ApiFunction<void, GetDataSourcesResponse> = async (
 
 export const getDataSourceTables: ApiFunction<GetTablesList, GetTablesListResponse> = async (data) => {
   return await post(DATA_SOURCE_ENDPOINTS.GET_DATA_SOURCE_TABLES, data);
+};
+
+export const deleteDataSource: ApiFunction<number, { id: number }> = async (source_id) => {
+  return await del(DATA_SOURCE_ENDPOINTS.DELETE_DATA_SOURCE(source_id));
 };

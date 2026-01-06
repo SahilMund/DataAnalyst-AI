@@ -96,6 +96,18 @@ class DB:
             raise HTTPException(
                 status_code=500, detail="Failed to insert data into database")
 
+    def drop_table(self, table_name: str):
+        """Drop a table from the database"""
+        try:
+            with self.session() as session:
+                session.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
+                session.commit()
+                logger.info(f"Dropped table: {table_name}")
+        except Exception as e:
+            logger.error(f"Error dropping table {table_name}: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to drop table: {str(e)}")
+
 
 class VectorDB:
     def __init__(self):
@@ -124,7 +136,7 @@ class VectorDB:
         """Insert documents into vector store"""
         try:
             return PGVector.from_documents(
-                embeddings=self.embeddings,
+                embedding=self.embeddings,
                 documents=documents,
                 collection_name=collection_name,
                 connection=self.connection_string,
@@ -148,3 +160,26 @@ class VectorDB:
             logger.exception(f"Vector store retrieval error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Failed to retrieve vector store: {str(e)}")
+
+    def delete_collection(self, collection_name: str):
+        """Delete a collection from the vector store"""
+        try:
+            # Manually drop the collection if PGVector doesn't expose it easily
+            # langchain_postgres uses langchain_pg_collection and langchain_pg_embedding tables
+            with self._get_engine().connect() as conn:
+                # Find collection id
+                res = conn.execute(text("SELECT uuid FROM langchain_pg_collection WHERE name = :name"), {"name": collection_name}).fetchone()
+                if res:
+                    collection_uuid = res[0]
+                    # Delete embeddings
+                    conn.execute(text("DELETE FROM langchain_pg_embedding WHERE collection_id = :id"), {"id": collection_uuid})
+                    # Delete collection
+                    conn.execute(text("DELETE FROM langchain_pg_collection WHERE uuid = :id"), {"id": collection_uuid})
+                    conn.commit()
+                    logger.info(f"Deleted vector collection: {collection_name}")
+        except Exception as e:
+            logger.error(f"Error deleting vector collection {collection_name}: {str(e)}")
+
+    def _get_engine(self):
+        # Helper to get engine for manual SQL
+        return create_engine(self.connection_string)

@@ -36,3 +36,14 @@ async def get_data_source_list(request: Request, db: DB = Depends(get_db)):
 @data_pipeline_router.post("/get-source-tables")
 async def get_source_tables(source: GetSourceTable):
     return await data_pipeline_controller.get_source_tables(source)
+
+
+@data_pipeline_router.get("/suggest-questions/{source_id}")
+async def suggest_questions(source_id: int, db: DB = Depends(get_db)):
+    return await data_pipeline_controller.suggest_questions(source_id, db)
+
+
+@data_pipeline_router.delete("/delete-data-source/{source_id}")
+async def delete_datasource(request: Request, source_id: int, db: DB = Depends(get_db)):
+    user_id = request.state.user_id
+    return await data_pipeline_controller.delete_datasource(source_id, user_id, db)
