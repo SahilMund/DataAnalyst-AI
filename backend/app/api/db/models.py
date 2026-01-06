@@ -1,10 +1,11 @@
 # File: app/db/models.py
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Enum, DateTime, ForeignKey, JSON, text
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Enum, DateTime, ForeignKey, JSON, text, Text
 from app.config.env import DATABASE_URL
 import logging
 from .chat_history import Conversations, Messages
 from .user import User
 from .data_sources import DataSources
+from .tasks import Tasks
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,21 @@ messages = Table(
     Column("conversation_id", Integer, ForeignKey("conversations.id")),
     Column("role", Enum('user', 'assistant', 'system', name='message_role')),
     Column("content", JSON),  # The actual message content
+    Column("created_at", DateTime, server_default=text('CURRENT_TIMESTAMP')),
+    Column("updated_at", DateTime, server_default=text(
+        'CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP')),
+)
+
+tasks = Table(
+    "tasks",
+    meta,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id")),
+    Column("data_source_id", Integer, ForeignKey("data_sources.id"), nullable=True),
+    Column("title", String(200), nullable=False),
+    Column("description", Text, nullable=True),
+    Column("status", String(50), server_default=text("'pending'")),
+    Column("priority", String(50), server_default=text("'medium'")),
     Column("created_at", DateTime, server_default=text('CURRENT_TIMESTAMP')),
     Column("updated_at", DateTime, server_default=text(
         'CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP')),

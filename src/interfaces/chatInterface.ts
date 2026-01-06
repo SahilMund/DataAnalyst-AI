@@ -5,7 +5,7 @@ export interface ChatRequestBody {
   conversaction_id: number;
   dataset_id: number;
   dataset_ids?: number[];
-  selected_tables: string[];
+  selected_tables?: string[];
   llm_model: string
 }
 
@@ -18,6 +18,7 @@ export interface StreamConfig {
 
 export interface InitiateConversationRequestBody {
   data_source_id: number;
+  title?: string;
 }
 
 export interface InitiateConversationResponse {

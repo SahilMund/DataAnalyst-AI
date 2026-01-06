@@ -27,7 +27,8 @@ class AskQuestion(BaseModel):
 
 
 class InitiateCinversaction(BaseModel):
-    data_source_id: int
+    data_source_id: Optional[int] = 0
+    title: Optional[str] = None
 
     class Config:
         json_schema_extra = {

@@ -5,6 +5,7 @@ import Layout from "./components/Layout";
 import ChatHistory from "./pages/chatHistory";
 import DataSource from "./pages/dataSource";
 import Settings from "./pages/settings";
+import Todos from "./pages/todos";
 import { getUser } from "./utils/localstorageUtils";
 
 // AuthWrapper component to handle authentication logic
@@ -34,6 +35,7 @@ const AppRoutes = () => {
         { path: "/chat-history", element: <ChatHistory /> },
         { path: "/data-sources", element: <DataSource /> },
         { path: "/settings", element: <Settings /> },
+        { path: "/todos", element: <Todos /> },
       ]
     },
   ]);

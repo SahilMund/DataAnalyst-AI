@@ -12,6 +12,7 @@ from app.api.db.data_sources import DataSources
 from app.api.db.chat_history import (Conversations, Messages)
 from datetime import datetime
 from app.utils.response_utils import create_response
+from app.utils.task_utils import execute_task_workflow
 import json
 
 # Set up logging
@@ -31,7 +32,7 @@ async def ask_question(id: int, body: AskQuestion, db: DB):
                 select(DataSources).where(DataSources.id.in_(all_dataset_ids))
             ).scalars().all()
 
-            if not data_sources:
+            if not data_sources and body.type != "task":
                 raise HTTPException(status_code=404, detail=create_response(
                     status_code=404,
                     message="Data source(s) not found",
@@ -56,14 +57,22 @@ async def ask_question(id: int, body: AskQuestion, db: DB):
             )
 
         # Single source logic (existing)
-        data_source = data_sources[0]
-        if body.type == "url":
+        data_source = data_sources[0] if data_sources else None
+        if body.type == "url" and data_source:
             return execute_workflow(
                 question=body.question,
                 conversation_id=body.conversaction_id,
                 db_url=data_source.connection_url,
                 table_list=body.selected_tables,
                 system_db=db,
+                llm_model=body.llm_model
+            )
+        elif body.type == "task":
+            return await execute_task_workflow(
+                question=body.question,
+                conversation_id=body.conversaction_id,
+                user_id=id, # the id passed to ask_question is the user_id
+                db=db,
                 llm_model=body.llm_model
             )
         elif body.type == "spreadsheet":
@@ -111,12 +120,18 @@ def initiate_convesactions(user_id: int, body: InitiateCinversaction, db: DB):
             # Generate name
             current_time = datetime.now()
             formatted_date = current_time.strftime("%Y %b %d %H:%M").lower()
-            combined_name = f"{data_source.name} {formatted_date}"
+            
+            if data_source:
+                combined_name = body.title or f"{data_source.name} {formatted_date}"
+                ds_id = data_source.id
+            else:
+                combined_name = body.title or f"Chat {formatted_date}"
+                ds_id = None
 
             # Create DataSources entry
             new_data_source = Conversations(
                 user_id=user_id,
-                data_source_id=data_source.id,
+                data_source_id=ds_id,
                 title=combined_name,
             )
 

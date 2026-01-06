@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import {useNavigate } from 'react-router-dom';
-import { BiPlus, BiBookContent, BiComment, BiSitemap, BiCog, BiMoon, BiSun, BiLogOut } from 'react-icons/bi';
+import { useNavigate } from 'react-router-dom';
+import { BiPlus, BiBookContent, BiComment, BiSitemap, BiCog, BiMoon, BiSun, BiLogOut, BiListCheck } from 'react-icons/bi';
 import { Link } from 'react-router-dom';
 import AddDataSourceModal from './dataSource/AddDataSourceModal';
 import { removeUser } from '../utils/localstorageUtils';
 
-const SideNav:React.FC = () => {
+const SideNav: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const navigate = useNavigate();
-  
+
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -19,9 +19,9 @@ const SideNav:React.FC = () => {
 
   return (
     <div className="w-24 dark:bg-maroon-800 flex flex-col items-center py-4 space-y-6">
-      
+
       <button className="p-2 text-navy-600 hover:bg-gray-200 rounded-lg dark:text-maroon-600">
-        <BiBookContent className="w-6 h-6" /> 
+        <BiBookContent className="w-6 h-6" />
       </button>
       <AddDataSourceModal>
         <button
@@ -41,7 +41,13 @@ const SideNav:React.FC = () => {
         className="p-2 text-navy-600 hover:bg-gray-200 rounded-lg dark:text-maroon-600"
       >
         <BiSitemap className="w-6 h-6" />
-        
+
+      </Link>
+      <Link
+        to={'/todos'}
+        className="p-2 text-navy-600 hover:bg-gray-200 rounded-lg dark:text-maroon-600"
+      >
+        <BiListCheck className="w-6 h-6" />
       </Link>
       <Link
         to={'/settings'}

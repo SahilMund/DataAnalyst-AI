@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from .routes.auth_router import auth_router
 from .routes.data_pipeline_router import data_pipeline_router
 from .routes.chat_router import chat_router
+from .routes.task_router import task_router
 
 # Create the main API router
 api_router = APIRouter()
@@ -24,4 +25,10 @@ api_router.include_router(
     chat_router,
     prefix="/api/chat/v1",
     tags=["chat"],
+)
+
+api_router.include_router(
+    task_router,
+    prefix="/api/tasks/v1",
+    tags=["tasks"],
 )

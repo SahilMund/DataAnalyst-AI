@@ -1,11 +1,24 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.api.middleware.auth_middleware import AuthMiddleware
 from app.api.db.models import init_db
 from app.dependencies.database import get_db
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Validation error for {request.url.path}: {exc.errors()}")
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
 
 # Add auth middleware
 app.add_middleware(AuthMiddleware)
