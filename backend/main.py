@@ -5,11 +5,18 @@ from app.api import api_router
 from app.api.middleware.auth_middleware import AuthMiddleware
 from app.api.db.models import init_db
 from app.dependencies.database import get_db
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from app.dependencies.limiter import limiter
 import logging
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -41,5 +48,6 @@ app.include_router(api_router)
 
 
 @app.get("/")
-def read_root():
+@limiter.limit("10/minute")
+def read_root(request: Request):
     return {"message": "Hello, Lumin API is running!"}

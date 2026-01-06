@@ -31,3 +31,5 @@ alembic
 sentence-transformers
 rank_bm25
 duckdb
+slowapi
+fastapi-mail
