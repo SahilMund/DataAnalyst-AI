@@ -4,7 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select, func, and_, text
 from sqlalchemy.orm import aliased
 from app.utils.chat_utils import (
-    execute_workflow, execute_document_chat, save_message)
+    execute_workflow, execute_document_chat, save_message, execute_multi_source_workflow)
 from app.api.validators.chat_validator import AskQuestion, InitiateCinversaction
 from app.config.db_config import DB
 from app.config.logging_config import get_logger
@@ -20,14 +20,21 @@ logger = get_logger(__name__)
 
 async def ask_question(id: int, body: AskQuestion, db: DB):
     try:
-        with db.session() as session:
-            data_source = session.execute(select(DataSources).where(
-                DataSources.id == body.dataset_id)).scalar_one_or_none()
+        all_dataset_ids = [body.dataset_id]
+        if body.dataset_ids:
+            all_dataset_ids.extend(body.dataset_ids)
+            # Remove duplicates
+            all_dataset_ids = list(set(all_dataset_ids))
 
-            if not data_source:
+        with db.session() as session:
+            data_sources = session.execute(
+                select(DataSources).where(DataSources.id.in_(all_dataset_ids))
+            ).scalars().all()
+
+            if not data_sources:
                 raise HTTPException(status_code=404, detail=create_response(
                     status_code=404,
-                    message="Data source not found",
+                    message="Data source(s) not found",
                     data={}
                 ))
 
@@ -38,6 +45,18 @@ async def ask_question(id: int, body: AskQuestion, db: DB):
             db=db
         )
 
+        # Multi-source analysis if more than one source
+        if len(data_sources) > 1:
+            return execute_multi_source_workflow(
+                question=body.question,
+                conversation_id=body.conversaction_id,
+                data_sources=data_sources,
+                system_db=db,
+                llm_model=body.llm_model
+            )
+
+        # Single source logic (existing)
+        data_source = data_sources[0]
         if body.type == "url":
             return execute_workflow(
                 question=body.question,
@@ -56,9 +75,9 @@ async def ask_question(id: int, body: AskQuestion, db: DB):
                 llm_model=body.llm_model
             )
         else:
-            print("execute_document_chat")
             return execute_document_chat(
                 body.question, "sentence-transformers/all-MiniLM-L6-v2", data_source.table_name, body.conversaction_id, db, body.llm_model)
+
 
     except HTTPException as he:
         return JSONResponse(status_code=500, content=create_response(

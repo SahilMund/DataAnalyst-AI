@@ -111,6 +111,8 @@ export default function Chat() {
   }, [data_source_id, dataSets])
 
 
+  const secondaryDataSetIds = dataSetStore((state) => state.secondaryDataSetIds);
+
   const askQuestion = () => {
     // Safely spread messages, handling empty array case
     setMessages((prevMessages) => [...prevMessages, { user_question: question }]);
@@ -127,6 +129,7 @@ export default function Chat() {
       type: typeToSend,
       conversaction_id: Number(conversation_id),
       dataset_id: Number(data_source_id),
+      dataset_ids: secondaryDataSetIds,
       selected_tables: tables,
       llm_model: selectedModel
     })

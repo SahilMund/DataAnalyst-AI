@@ -161,6 +161,34 @@ class VectorDB:
             raise HTTPException(
                 status_code=500, detail=f"Failed to retrieve vector store: {str(e)}")
 
+    def get_all_documents(self, collection_name: str) -> List[Document]:
+        """Fetch all documents for a collection from the database"""
+        try:
+            documents = []
+            with self._get_engine().connect() as conn:
+                # 1. Find the collection UUID
+                query_coll = text("SELECT uuid FROM langchain_pg_collection WHERE name = :name")
+                res_coll = conn.execute(query_coll, {"name": collection_name}).fetchone()
+                
+                if not res_coll:
+                    return []
+                
+                collection_uuid = res_coll[0]
+                
+                # 2. Fetch all embeddings/documents for this collection
+                query_docs = text("SELECT document, cmetadata FROM langchain_pg_embedding WHERE collection_id = :id")
+                res_docs = conn.execute(query_docs, {"id": collection_uuid}).fetchall()
+                
+                for row in res_docs:
+                    content = row[0]
+                    metadata = row[1] if row[1] else {}
+                    documents.append(Document(page_content=content, metadata=metadata))
+            
+            return documents
+        except Exception as e:
+            logger.error(f"Error fetching documents for {collection_name}: {str(e)}")
+            return []
+
     def delete_collection(self, collection_name: str):
         """Delete a collection from the vector store"""
         try:

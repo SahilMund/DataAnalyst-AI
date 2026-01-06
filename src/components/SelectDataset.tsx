@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MdKeyboardArrowDown, MdLightbulbOutline } from 'react-icons/md';
+import { BiLink } from 'react-icons/bi';
 import dataSetStore from '../zustand/stores/dataSetStore';
 import { useGetDataSourcesMutation, useGetTablesMutation, useSuggestQuestionsMutation } from '../hooks/useDataSet';
 import { SelectModelSkeleton } from './loaders/DataSourceTableLoader';
@@ -19,6 +20,9 @@ const SelectDataset: React.FC<SelectDatasetProps> = ({ onSuggestClick }) => {
   const dataSets = dataSetStore((state) => state.dataSets);
   const getDataSet = dataSetStore((state) => state.getDataSet);
   const setModel = dataSetStore((state) => state.setModel);
+  const secondaryDataSetIds = dataSetStore((state) => state.secondaryDataSetIds);
+  const addSecondary = dataSetStore((state) => state.addSecondaryDataSet);
+  const removeSecondary = dataSetStore((state) => state.removeSecondaryDataSet);
 
   const { mutate: getDataSource, status: dataSourceStatus } = useGetDataSourcesMutation();
   const { mutate: getTables, status: loadTableStatus } = useGetTablesMutation();
@@ -99,6 +103,54 @@ const SelectDataset: React.FC<SelectDatasetProps> = ({ onSuggestClick }) => {
                 <MdKeyboardArrowDown className="h-5 w-5" />
               </div>
             </div>
+          </div>
+
+          {/* Secondary Sources selection */}
+          <div className="w-full max-w-lg mb-10">
+            <div className="flex flex-wrap gap-2 mb-4 justify-center">
+              {secondaryDataSetIds.map(id => {
+                const s = dataSets?.find(d => d.id === Number(id)); // Type cast to handle both string/number
+                if (!s) return null;
+                return (
+                  <div key={id} className="flex items-center bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-semibold border border-blue-100 shadow-sm animate-in zoom-in-50">
+                    <span className="mr-2 truncate max-w-[150px]">{s.name}</span>
+                    <button
+                      onClick={() => removeSecondary(Number(id))}
+                      className="hover:text-red-500 transition-colors bg-white/50 rounded-full w-4 h-4 flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="relative group">
+              <select
+                className={`w-full appearance-none bg-white border-blue-gray-100 text-gray-700 border rounded-[12px] py-3 pr-10 pl-10 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm hover:shadow-md`}
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) addSecondary(Number(e.target.value));
+                }}
+              >
+                <option value="">+ Add another data source for cross-analysis</option>
+                {dataSets
+                  ?.filter(d => d.id !== Number(data_source_id) && !secondaryDataSetIds.includes(Number(d.id)))
+                  .map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.type})</option>
+                  ))
+                }
+              </select>
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <BiLink className="h-5 w-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <div className={`mr-l pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700`}>
+                <MdKeyboardArrowDown className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-[10px] text-center text-gray-400 mt-2 italic">
+              LUMIN can now join data across multiple sources automatically using DuckDB fusion.
+            </p>
           </div>
 
           {/* Suggested Questions */}

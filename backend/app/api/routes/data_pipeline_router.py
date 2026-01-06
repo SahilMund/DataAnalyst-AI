@@ -43,6 +43,11 @@ async def suggest_questions(source_id: int, db: DB = Depends(get_db)):
     return await data_pipeline_controller.suggest_questions(source_id, db)
 
 
+@data_pipeline_router.get("/analyze-health/{source_id}")
+async def analyze_health(source_id: int, db: DB = Depends(get_db)):
+    return await data_pipeline_controller.analyze_health(source_id, db)
+
+
 @data_pipeline_router.delete("/delete-data-source/{source_id}")
 async def delete_datasource(request: Request, source_id: int, db: DB = Depends(get_db)):
     user_id = request.state.user_id

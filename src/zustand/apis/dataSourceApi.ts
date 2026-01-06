@@ -46,3 +46,7 @@ export const getDataSourceTables: ApiFunction<GetTablesList, GetTablesListRespon
 export const deleteDataSource: ApiFunction<number, { id: number }> = async (source_id) => {
   return await del(DATA_SOURCE_ENDPOINTS.DELETE_DATA_SOURCE(source_id));
 };
+
+export const analyzeHealth: ApiFunction<number, any> = async (source_id) => {
+  return await get(DATA_SOURCE_ENDPOINTS.ANALYZE_HEALTH(source_id));
+};

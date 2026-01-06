@@ -1,21 +1,39 @@
 import React, { useEffect } from 'react';
 import { BiFile, BiLink, BiTrash } from 'react-icons/bi';
 import { BsFillFileEarmarkSpreadsheetFill } from "react-icons/bs";
-import { useGetDataSourcesMutation, useDeleteDataSourceMutation } from '../hooks/useDataSet';
+import { useGetDataSourcesMutation, useDeleteDataSourceMutation, useAnalyzeHealthMutation } from '../hooks/useDataSet';
+import { MdHealthAndSafety } from 'react-icons/md';
 import dataSetStore from '../zustand/stores/dataSetStore';
 import { DataSourceTableLoader } from '../components/loaders/DataSourceTableLoader';
+import { toast } from 'react-toastify';
 
 const DataSource: React.FC = () => {
 
   const dataSets = dataSetStore((state) => state.dataSets);
-  const { mutate: getDataSource, status } = useGetDataSourcesMutation();
+  const { mutate: getDataSource,status } = useGetDataSourcesMutation();
   const { mutate: deleteSource } = useDeleteDataSourceMutation();
+  const { mutate: analyzeHealth, status: healthStatus } = useAnalyzeHealthMutation();
 
   useEffect(() => {
-    if (!dataSets) {
+    if(!dataSets){
       getDataSource()
     }
   }, [])
+
+  const handleAnalyze = (id: number) => {
+    toast.info("Analyzing data health...");
+    analyzeHealth(id, {
+      onSuccess: (res) => {
+        const suggestions = res.data.suggestions;
+        if (suggestions && suggestions.length > 0) {
+          const formatted = suggestions.map((s: any) => `• ${s.issue}: ${s.fix}`).join('\n');
+          alert(`Data Health Suggestions:\n\n${formatted}`);
+        } else {
+          toast.success("Data looks healthy!");
+        }
+      }
+    });
+  };
 
   const handleDelete = (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
@@ -74,7 +92,14 @@ const DataSource: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => handleDelete(file.id as number, file.name)}
+                      onClick={() => handleAnalyze(file.id as number)}
+                      className="text-green-500 hover:text-green-700 transition-colors p-2 rounded-full hover:bg-green-50 mr-2"
+                      title="Analyze Data Health"
+                    >
+                      <MdHealthAndSafety className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(file.id as number, file.name)}
                           className="text-red-400 hover:text-red-700 transition-colors p-2 rounded-full hover:bg-red-50"
                           title="Delete Data Source"
                         >

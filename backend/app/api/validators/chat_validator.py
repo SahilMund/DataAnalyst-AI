@@ -8,7 +8,8 @@ class AskQuestion(BaseModel):
     type: str = Field(..., description="The type of question or analysis")
     selected_tables: Optional[List[str]] = Field(
         None, description="List of selected tables (optional)")
-    dataset_id: int = Field(..., description="Dataset ID to query")
+    dataset_id: int = Field(..., description="Primary Dataset ID to query")
+    dataset_ids: Optional[List[int]] = Field(None, description="Additional dataset IDs for multi-source analysis")
     conversaction_id: int = Field(..., description="Conversaction ID to query")
     llm_model: str = Field(..., description="Model name for LLM")
 

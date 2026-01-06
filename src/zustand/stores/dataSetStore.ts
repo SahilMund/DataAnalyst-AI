@@ -6,6 +6,10 @@ export interface DataSetStore {
   dataSets: DataSources[] | null;
   tables: string[];
   selectedModel: string;
+  secondaryDataSetIds: number[];
+  setSecondaryDataSets: (ids: number[]) => void;
+  addSecondaryDataSet: (id: number) => void;
+  removeSecondaryDataSet: (id: number) => void;
   setTables: (tables: string[]) => void;
   setModel: (model: string) => void;
   setDataSet: (dataSets: DataSources[]) => void;
@@ -19,6 +23,19 @@ const dataSetStore = create<DataSetStore>((set) => ({
   dataSets: null,
   tables: [],
   selectedModel: "llama-3.1-8b-instant",
+  secondaryDataSetIds: [],
+
+  setSecondaryDataSets: (ids: number[]) => set({ secondaryDataSetIds: ids }),
+  addSecondaryDataSet: (id: number) =>
+    set((state) => ({
+      secondaryDataSetIds: state.secondaryDataSetIds.includes(id)
+        ? state.secondaryDataSetIds
+        : [...state.secondaryDataSetIds, id]
+    })),
+  removeSecondaryDataSet: (id: number) =>
+    set((state) => ({
+      secondaryDataSetIds: state.secondaryDataSetIds.filter(sid => sid !== id)
+    })),
 
   setTables: (tables: string[]) => set({ tables }),
   setModel: (model: string) => set({ selectedModel: model }),

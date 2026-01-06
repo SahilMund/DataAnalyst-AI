@@ -21,4 +21,5 @@ export const DATA_SOURCE_ENDPOINTS = {
   GET_DATA_SOURCE_TABLES: `${API_BASE_URL}/data/v1/get-source-tables`,
   SUGGEST_QUESTIONS: (source_id: number) => `${API_BASE_URL}/data/v1/suggest-questions/${source_id}`,
   DELETE_DATA_SOURCE: (source_id: number) => `${API_BASE_URL}/data/v1/delete-data-source/${source_id}`,
+  ANALYZE_HEALTH: (source_id: number) => `${API_BASE_URL}/data/v1/analyze-health/${source_id}`,
 };

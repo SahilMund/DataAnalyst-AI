@@ -4,9 +4,12 @@ from app.config.db_config import DB, VectorDB
 from fastapi.responses import StreamingResponse, JSONResponse
 from langchain_classic.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
+# from langchain_community.retrievers import BM25Retriever (removed for lazy loading)
+# from langchain.retrievers import EnsembleRetriever (removed for lazy loading)
 from typing import List, Optional
 from app.config.logging_config import get_logger
 from app.api.db.chat_history import Messages, Conversations
+from app.api.db.data_sources import DataSources
 from datetime import datetime
 from sqlalchemy import JSON
 from sqlalchemy.exc import SQLAlchemyError
@@ -118,10 +121,10 @@ def execute_document_chat(question: str, embedding_model: str, table_name: str, 
         1. **DIRECT ANSWER**: Start with a 1-2 sentence extremely precise and short answer.
         
         2. **DETAILED ANALYSIS**: Follow with a comprehensive breakdown.
-           - Use ### Headings and #### Subheadings for organization.
-           - Use bullet points (*) for key takeaways or data points.
-           - Use **bold** for emphasis on important metrics or dates.
-           - If applicable, mention trends, patterns, or anomalies.
+            - Use ### Headings and #### Subheadings for organization.
+            - Use bullet points (*) for key takeaways or data points.
+            - Use **bold** for emphasis on important metrics or dates.
+            - If applicable, mention trends, patterns, or anomalies.
 
         IMPORTANT GUIDELINES:
         - Use ONLY the information provided in the context.
@@ -140,11 +143,45 @@ def execute_document_chat(question: str, embedding_model: str, table_name: str, 
             template=prompt_template, input_variables=["context", "question"]
         )
 
+        # Build Hybrid Retriever
+        # 1. Fetch all documents for BM25
+        all_docs = vectorDB_instance.get_all_documents(table_name)
+        
+        # 2. Vector Retriever (Semantic)
+        vector_retriever = vector_store.as_retriever(search_kwargs={"k": 2})
+        
+        # 3. BM25 Retriever (Keyword - exact matches)
+        hybrid_retriever = vector_retriever
+        if all_docs:
+            try:
+                from langchain_community.retrievers import BM25Retriever
+                # Try direct import first, then module import
+                try:
+                    from langchain.retrievers.ensemble import EnsembleRetriever
+                except ImportError:
+                    from langchain.retrievers import EnsembleRetriever
+                
+                bm25_retriever = BM25Retriever.from_documents(all_docs)
+                bm25_retriever.k = 2
+                
+                # 4. Hybrid Ensemble
+                hybrid_retriever = EnsembleRetriever(
+                    retrievers=[vector_retriever, bm25_retriever],
+                    weights=[0.5, 0.5]
+                )
+                logger.info("Hybrid Search initialized successfully.")
+            except ImportError as e:
+                logger.warning(f"Hybrid search components not found or error loading: {str(e)}. Falling back to vector-only search.")
+                hybrid_retriever = vector_retriever
+        else:
+            # Fallback to vector only if no documents found (unlikely)
+            hybrid_retriever = vector_retriever
+
         # Create a RetrievalQA chain
         qa = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
-            retriever=vector_store.as_retriever(search_kwargs={"k": 2}),
+            retriever=hybrid_retriever,
             return_source_documents=True,
             chain_type_kwargs={"prompt": PROMPT}
         )
@@ -212,3 +249,63 @@ def save_message(conversation_id: int, role: str, content: JSON, db: DB):
             "message": "Database error occurred",
             "error": str(e)
         })
+
+def execute_multi_source_workflow(question: str, conversation_id: int, data_sources: List[DataSources], system_db: DB, llm_model: str = "llama-3.1-8b-instant"):
+    try:
+        llm = llm_instance.groq(llm_model)
+        
+        # 1. Collect schemas and build source mapping
+        combined_schema = []
+        source_map = {} # table_name -> connection_url or "system"
+        
+        for source in data_sources:
+            if source.type == "url":
+                external_db = DB(source.connection_url)
+                # For external DBs, we might not want all tables, but for now get names
+                # Actually, analyst_prompts needs table schemas
+                # We'll use the inspector to get all table names first
+                tables = external_db.inspector.get_table_names()
+                schema = external_db.get_schemas(tables)
+                combined_schema.extend(schema)
+                for t in tables:
+                    source_map[t] = source.connection_url
+            elif source.type == "spreadsheet":
+                schema = system_db.get_schemas([source.table_name])
+                combined_schema.extend(schema)
+                source_map[source.table_name] = "system"
+        
+        # 2. Initialize Workflow
+        workflow_manager = WorkflowManager(llm, system_db)
+        app = workflow_manager.create_workflow().compile()
+        
+        def event_stream():
+            ai_responses = []
+            try:
+                # Pass source_map to the state so run_sql_query knows where to go
+                initial_state = {
+                    "question": question, 
+                    "schema": combined_schema,
+                    "source_map": source_map  # New state key
+                }
+                
+                for event in app.stream(initial_state):
+                    for value in event.values():
+                        ai_responses.append(json.dumps(value))
+                        yield json.dumps({"data": value}) + "\n"
+
+                # Save the final answer
+                save_message(
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=json.dumps({"answer": ai_responses}),
+                    db=system_db
+                )
+            except Exception as e:
+                logger.error(f"Error in multi-source stream: {str(e)}")
+                yield json.dumps({"error": str(e)}) + "\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    except Exception as e:
+        logger.error(f"Failed to execute multi-source workflow: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

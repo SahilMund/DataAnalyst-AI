@@ -8,6 +8,8 @@ from app.config.db_config import DB
 from app.config.logging_config import get_logger
 import datetime
 from decimal import Decimal
+import pandas as pd
+# import duckdb (removed for lazy loading)
 
 logger = get_logger(__name__)
 
@@ -47,6 +49,8 @@ class AgentState(TypedDict):
     visualization: Annotated[str, operator.add]
     visualization_reason: Annotated[str, operator.add]
     formatted_data_for_visualization: Optional[Dict[str, Any]]
+    source_map: Optional[Dict[str, str]]
+    multi_source_data: Optional[Dict[str, pd.DataFrame]]
 
 
 class WorkflowManager:
@@ -80,9 +84,11 @@ class WorkflowManager:
             return self.serialize_row(value)
         return value
 
-    def run_sql_query(self, state: Dict[str, Any]) -> Dict[List, Any]:
+    def run_sql_query(self, state: Dict[str, Any]) -> Dict[str, Any]:
         print("========== run_sql_query ==========")
         query = state['sql_query']
+        source_map = state.get('source_map', {})
+        
         if query == "NOT_RELEVANT":
             return {"query_result": []}
 
@@ -91,10 +97,56 @@ class WorkflowManager:
         print("SQL QUERY :", cleaned_query)
 
         try:
-            result = self.db.execute_query(cleaned_query)
-            # Convert result to JSON-serializable format
-            serialized_result = [self.serialize_row(row) for row in result]
+            # 1. Identify involved tables
+            # Rough check: which keys in source_map are present in the query?
+            involved_sources = set()
+            for table, source in source_map.items():
+                # use word boundaries or just check if table is in query
+                if table.lower() in cleaned_query.lower():
+                    involved_sources.add(source)
+
+            # 2. Case A: Single Source (Standard Flow)
+            if len(involved_sources) <= 1:
+                target_db = self.db
+                if involved_sources:
+                    source_url = list(involved_sources)[0]
+                    if source_url != "system":
+                        target_db = DB(source_url)
+                
+                result = target_db.execute_query(cleaned_query)
+                serialized_result = [self.serialize_row(row) for row in result]
+                return {"query_result": serialized_result}
+
+            # 3. Case B: Multi-Source Join (Federated Flow)
+            logger.info(f"Multi-source join detected across {len(involved_sources)} sources")
+            
+            import duckdb
+            # Create a DuckDB connection for in-memory join
+            duck_conn = duckdb.connect(database=':memory:')
+            
+            # Fetch involved tables into Pandas dataframes and register with DuckDB
+            for table, source in source_map.items():
+                if table.lower() in cleaned_query.lower():
+                    # Fetch table
+                    source_db = self.db if source == "system" else DB(source)
+                    # Use pandas to read the entire table (or we could try to be smarter and filter)
+                    # For a massive feature, we'll fetch the whole table for now
+                    df = pd.read_sql(f'SELECT * FROM "{table}"', source_db.engine)
+                    duck_conn.register(table, df)
+            
+            # Execute the cross-source query in DuckDB
+            final_df = duck_conn.execute(cleaned_query).df()
+            
+            # Convert results to list of dicts
+            serialized_result = final_df.to_dict(orient='records')
+            # Handle Decimals/Dates in the dict
+            serialized_result = [
+                {k: self.serialize_value(v) for k, v in row.items()}
+                for row in serialized_result
+            ]
+            
             return {"query_result": serialized_result}
+
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
             return {"query_result": [], "error": str(e)}

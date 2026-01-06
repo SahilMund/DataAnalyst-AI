@@ -29,3 +29,5 @@ pypdf
 python-multipart
 alembic
 sentence-transformers
+rank_bm25
+duckdb

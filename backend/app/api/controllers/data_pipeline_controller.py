@@ -389,6 +389,66 @@ async def suggest_questions(source_id: int, db: DB) -> JSONResponse:
         ))
 
 
+async def analyze_health(source_id: int, db: DB) -> JSONResponse:
+    try:
+        with db.session() as session:
+            data_source = session.execute(select(DataSources).where(
+                DataSources.id == source_id)).scalar_one_or_none()
+
+            if not data_source:
+                return JSONResponse(status_code=404, content=create_response(status_code=404, message="Data source not found", data={}))
+
+            # 1. Fetch a sample of data for profiling
+            sample_data = ""
+            if data_source.type in ['spreadsheet', 'url']:
+                target_db = db
+                if data_source.type == 'url':
+                    target_db = DB(data_source.connection_url)
+                
+                table_name = data_source.name if data_source.type == 'url' else data_source.table_name
+                # Get first 10 rows
+                df = pd.read_sql(f'SELECT * FROM "{table_name}" LIMIT 10', target_db.engine)
+                sample_data = df.to_string()
+            else:
+                return JSONResponse(status_code=200, content=create_response(status_code=200, message="Document health check not yet implemented", data={"suggestions": []}))
+
+            # 2. Use LLM to find data quality issues
+            llm_instance = LLM()
+            model = llm_instance.groq("llama-3.3-70b-versatile")
+
+            prompt = f"""
+            You are a Data Quality Agent. Analyze this sample of data and provide 3-5 specific suggestions for cleaning or normalizing it to improve analysis.
+            Focus on inconsistencies, null patterns, or formatting issues.
+            
+            Data Sample:
+            {sample_data}
+            
+            Return ONLY a JSON object with a key 'suggestions' containing a list of objects with 'issue' and 'fix' keys.
+            Example: {{"suggestions": [{{"issue": "Inconsistent city names", "fix": "Normalize NYC/New York"}}]}}
+            """
+            
+            response = model.invoke(prompt)
+            content = response.content.strip()
+            
+            # Clean JSON blocks
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            
+            try:
+                suggestions_data = json.loads(content)
+            except:
+                suggestions_data = {"suggestions": [{"issue": "General check", "fix": "Ensure all columns have consistent data types"}]}
+
+            return JSONResponse(status_code=200, content=create_response(
+                status_code=200,
+                message="Data health analyzed",
+                data=suggestions_data
+            ))
+
+    except Exception as e:
+        logger.exception(f"Error analyzing health: {str(e)}")
+        return JSONResponse(status_code=500, content=create_response(status_code=500, message="Failed to analyze health", data={"error": str(e)}))
+
 async def delete_datasource(source_id: int, user_id: int, db: DB) -> JSONResponse:
     try:
         with db.session() as session:

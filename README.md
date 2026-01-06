@@ -417,6 +417,28 @@ class LLM:
         return self.llm.invoke(prompt)
 ```
 
+
+I have successfully implemented all three Advanced Data Features. These upgrades move LUMIN into a "Power User" category for data professionals.
+
+1. Multi-Source Analysis (Data Fusion)
+Federated Join Engine: I've integrated DuckDB into the backend. When a query requires data from multiple sources (e.g., joining an uploaded Marketing CSV with a production SQL DB), LUMIN now automatically fetches the relevant datarames into a high-performance in-memory fusion layer and executes the join.
+Multi-Select UI: The 
+SelectDataset
+ component now allows you to "+ Add another data source" to the current chat session. You'll see selected sources as premium blue chips below the main selectors.
+2. Automated Data Cleaning Agent (Health Check)
+Proactive Profiling: Added a new "Analyze Health" icon (shield with heart) to your Data Sources table.
+LLM Data Quality Bot: When triggered, it samples your data and uses a specialized DataQualityAgent to identify inconsistencies (like "NYC" vs "New York") or formatting issues, providing specific "Issue & Fix" suggestions to ensure your analysis is accurate.
+3. Hybrid Search for Documents (RAG 2.0)
+Ensemble Retrieval: I've upgraded the RAG engine from pure Vector Search to Hybrid Search.
+BM25 + Semantic: It now combines keyword-based retrieval (BM25) with semantic vector embeddings. This ensures that exact matches (Product IDs, names, SKU codes) are caught by the keyword search while broad concepts are handled by vectors. This massive improvement significantly reduces "hallucinations" when looking for specific record details.
+Technical Details:
+Added duckdb and rank_bm25 to the backend dependencies.
+Extended the 
+AgentState
+ and SQLWorkflow to support a source_map, allowing the AI to route queries across different connections.
+Maintained full backward compatibility so single-source chats still work exactly as before.
+
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
