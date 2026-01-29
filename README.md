@@ -8,13 +8,13 @@ LUMIN is an intelligent data analysis platform that transforms how you interact 
 
 ## 🎥 Demo 
 
-<div align="center">
+<!-- <div align="center">
   <a href="https://www.youtube.com/watch?v=jR0rGJOhxIw">
     <img src="https://img.youtube.com/vi/jR0rGJOhxIw/maxresdefault.jpg" alt="Video Demo" style="width:100%;">
   </a>
 </div>
 
-**Youtube Video URL :** https://www.youtube.com/watch?v=jR0rGJOhxIw
+**Youtube Video URL :** https://www.youtube.com/watch?v=jR0rGJOhxIw -->
 
 ## 🚀 Quick Start
 
@@ -27,7 +27,7 @@ LUMIN is an intelligent data analysis platform that transforms how you interact 
 
 ```bash
 # Clone the repository
-git clone https://github.com/spandan114/LuminAI-Data-Analyst.git
+git clone https://github.com/SahilMund/DataAnalyst-AI.git
 cd lumin_ai
 
 ```

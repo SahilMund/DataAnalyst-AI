@@ -94,7 +94,7 @@ const ChatHistory = () => {
                 return (
                   <div className="mb-6 flex items-start" key={index}>
                     <Avatar
-                      name="Spandan Joshi"
+                      name="Sahil Mund"
                       size="40"
                       className="h-8 w-8 mr-2 rounded-md flex-shrink-0"
                     />
