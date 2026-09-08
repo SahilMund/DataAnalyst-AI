@@ -1,0 +1,1020 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LUMIN System Design Walkthrough</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f3f0e8; --surface:#ffffff; --surface-2:#eae5d8; --surface-3:#dfd8c6;
+    --ink:#1d1a15; --ink-dim:#6d6455; --ink-faint:#948b78;
+    --line:rgba(29,26,21,.14); --line-strong:rgba(29,26,21,.28);
+    --accent:#a15a12; --accent-soft:#a15a1216; --accent-ink:#fff8ee;
+    --accent-2:#2c7a67; --accent-2-soft:#2c7a6716;
+    --danger:#a8402c; --danger-soft:#a8402c14;
+    --code-bg:#eae4d3; --code-ink:#5a3a12;
+    --shadow:0 1px 2px rgba(29,26,21,.06), 0 8px 24px rgba(29,26,21,.05);
+    --serif:'IBM Plex Serif', Georgia, serif;
+    --sans:'IBM Plex Sans', -apple-system, system-ui, sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14171b; --surface:#1a1e23; --surface-2:#20252b; --surface-3:#2a3037;
+      --ink:#e9e5d9; --ink-dim:#a19a89; --ink-faint:#726b5c;
+      --line:rgba(233,229,217,.12); --line-strong:rgba(233,229,217,.24);
+      --accent:#e2a248; --accent-soft:#e2a24822; --accent-ink:#191307;
+      --accent-2:#6cc4ac; --accent-2-soft:#6cc4ac1e;
+      --danger:#e2725e; --danger-soft:#e2725e1c;
+      --code-bg:#10141a; --code-ink:#e2b169;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14171b; --surface:#1a1e23; --surface-2:#20252b; --surface-3:#2a3037;
+    --ink:#e9e5d9; --ink-dim:#a19a89; --ink-faint:#726b5c;
+    --line:rgba(233,229,217,.12); --line-strong:rgba(233,229,217,.24);
+    --accent:#e2a248; --accent-soft:#e2a24822; --accent-ink:#191307;
+    --accent-2:#6cc4ac; --accent-2-soft:#6cc4ac1e;
+    --danger:#e2725e; --danger-soft:#e2725e1c;
+    --code-bg:#10141a; --code-ink:#e2b169;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:15.5px; line-height:1.6; margin:0;
+  }
+  h1,h2,h3,h4{font-family:var(--serif); text-wrap:balance; color:var(--ink); margin:0;}
+  code, .mono{font-family:var(--mono);}
+  a{color:var(--accent);}
+  ::selection{background:var(--accent-soft);}
+
+  .shell{display:grid; grid-template-columns:272px minmax(0,1fr); max-width:1320px; margin:0 auto;}
+  @media (max-width:920px){ .shell{grid-template-columns:1fr;} }
+
+  /* ---------- TOC rail ---------- */
+  nav.toc{
+    position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+    padding:26px 14px 40px 22px; border-right:1px solid var(--line);
+  }
+  @media (max-width:920px){ nav.toc{position:static; height:auto; border-right:none; border-bottom:1px solid var(--line);} }
+  .toc-brand{display:flex; align-items:baseline; gap:8px; margin-bottom:4px;}
+  .toc-brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent); flex:none; box-shadow:0 0 0 3px var(--accent-soft);}
+  .toc-brand b{font-family:var(--serif); font-size:17px; letter-spacing:.2px;}
+  .toc-sub{font-size:11.5px; color:var(--ink-faint); font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; margin:2px 0 20px;}
+  .toc-clock{display:flex; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--ink-dim); background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:18px;}
+  .toc-clock b{color:var(--accent); font-weight:600;}
+  ol.toc-list{list-style:none; margin:0; padding:0; counter-reset:sec;}
+  ol.toc-list li{counter-increment:sec; margin-bottom:1px;}
+  ol.toc-list a{
+    display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-dim);
+    padding:6px 8px 6px 6px; border-radius:7px; font-size:13px; border-left:2px solid transparent;
+  }
+  ol.toc-list a::before{
+    content:counter(sec,decimal-leading-zero); font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+    flex:none; padding-top:1px;
+  }
+  ol.toc-list a:hover{background:var(--surface-2); color:var(--ink);}
+  ol.toc-list a.active{background:var(--accent-soft); color:var(--ink); border-left-color:var(--accent); font-weight:500;}
+  ol.toc-list a.active::before{color:var(--accent);}
+  .toc-tag{font-family:var(--mono); font-size:9.5px; color:var(--ink-faint); margin-left:auto; padding-top:2px; white-space:nowrap;}
+
+  /* ---------- main content ---------- */
+  main{padding:40px 48px 120px; min-width:0;}
+  @media (max-width:920px){ main{padding:28px 20px 90px;} }
+
+  .hero{border-bottom:1px solid var(--line); padding-bottom:26px; margin-bottom:34px;}
+  .hero .kicker{font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--accent); margin-bottom:10px;}
+  .hero h1{font-size:34px; font-weight:600; line-height:1.15;}
+  .hero h1 em{font-style:italic; color:var(--accent);}
+  .hero p.lede{font-size:16px; color:var(--ink-dim); max-width:66ch; margin-top:12px;}
+  .hero-meta{display:flex; gap:22px; flex-wrap:wrap; margin-top:20px; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
+  .hero-meta b{color:var(--ink); font-weight:600;}
+
+  section.sec{padding:44px 0; border-bottom:1px solid var(--line); scroll-margin-top:20px;}
+  section.sec:last-of-type{border-bottom:none;}
+  .sec-head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:6px;}
+  .sec-num{font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:600;}
+  .sec-head h2{font-size:24px; font-weight:600;}
+  .sec-time{margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--ink-faint); background:var(--surface-2); border:1px solid var(--line); border-radius:20px; padding:3px 10px; white-space:nowrap;}
+  .sec-dek{color:var(--ink-dim); font-size:14.5px; max-width:70ch; margin:6px 0 22px;}
+
+  h3.sub{font-size:16px; font-weight:600; margin:26px 0 10px; display:flex; align-items:center; gap:8px;}
+  h3.sub .chip{font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); background:var(--accent-soft); border-radius:5px; padding:2px 7px;}
+  h4.micro{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-faint); margin:18px 0 8px;}
+
+  p{margin:0 0 12px; max-width:74ch;}
+  ul.pt, ol.pt{margin:0 0 14px; padding-left:1.3em;}
+  ul.pt li, ol.pt li{margin-bottom:7px; padding-left:2px; max-width:72ch;}
+  ul.pt.tight li, ol.pt.tight li{margin-bottom:4px;}
+  ul.nomarker{list-style:none; padding-left:0;}
+
+  .callout{display:flex; gap:12px; background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:13px 16px; margin:16px 0; box-shadow:var(--shadow);}
+  .callout.warn{border-left-color:var(--danger);}
+  .callout.good{border-left-color:var(--accent-2);}
+  .callout .icon{font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.05em; color:var(--accent); flex:none; padding-top:2px; text-transform:uppercase;}
+  .callout.warn .icon{color:var(--danger);}
+  .callout.good .icon{color:var(--accent-2);}
+  .callout p, .callout ul{margin:0;}
+  .callout ul{padding-left:1.1em;}
+
+  code.inline{background:var(--code-bg); color:var(--code-ink); padding:1.5px 5px; border-radius:4px; font-size:.87em;}
+
+  table{width:100%; border-collapse:collapse; margin:14px 0 20px; font-size:13.6px;}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
+  thead th{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); border-bottom:1px solid var(--line-strong); font-weight:600;}
+  tbody tr:hover{background:var(--surface-2);}
+  td.mono, th.mono{font-family:var(--mono); font-size:12.6px;}
+  .tbl-wrap{overflow-x:auto; border-radius:10px;}
+  .col-good{color:var(--accent-2);}
+  .col-bad{color:var(--danger);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  @media (max-width:760px){ .grid2,.grid3{grid-template-columns:1fr;} }
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px 18px; box-shadow:var(--shadow);}
+  .card h4{font-family:var(--sans); font-weight:600; font-size:13.5px; margin-bottom:8px; display:flex; align-items:center; gap:8px;}
+  .card h4 .dot{width:7px;height:7px;border-radius:50%; flex:none;}
+  .card p, .card ul{margin:0;}
+  .card ul{padding-left:1.05em; font-size:13.4px;}
+  .card ul li{margin-bottom:5px;}
+
+  .storewrap .tbl-wrap table td:first-child{font-weight:600;}
+
+  details.deep{background:var(--surface); border:1px solid var(--line); border-radius:10px; margin:14px 0; overflow:hidden;}
+  details.deep summary{cursor:pointer; list-style:none; padding:12px 16px; font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); display:flex; align-items:center; gap:8px; user-select:none;}
+  details.deep summary::-webkit-details-marker{display:none;}
+  details.deep summary::before{content:"▸"; color:var(--accent); font-family:var(--sans); transition:transform .15s;}
+  details.deep[open] summary::before{transform:rotate(90deg);}
+  details.deep summary b{color:var(--ink); font-family:var(--sans); font-weight:600; font-size:13.5px;}
+  details.deep .deep-body{padding:2px 18px 16px; border-top:1px solid var(--line);}
+
+  .diagram-wrap{position:relative; margin:16px 0;}
+  .diagram-wrap pre.mermaid{margin:0; cursor:zoom-in; transition:box-shadow .15s;}
+  .diagram-wrap:hover pre.mermaid{box-shadow:var(--shadow), 0 0 0 2px var(--accent-soft);}
+  pre.mermaid{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:18px; overflow-x:auto; box-shadow:var(--shadow);}
+  .expand-btn{
+    position:absolute; top:10px; right:10px; z-index:2;
+    display:flex; align-items:center; gap:6px; cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); border-radius:7px;
+    padding:5px 10px; font-family:var(--mono); font-size:10.5px; color:var(--ink-dim);
+    text-transform:uppercase; letter-spacing:.06em; box-shadow:var(--shadow);
+    opacity:0; transition:opacity .12s;
+  }
+  .diagram-wrap:hover .expand-btn, .expand-btn:focus-visible{opacity:1;}
+  .expand-btn:hover{color:var(--accent); border-color:var(--accent);}
+
+  #diagBackdrop{
+    position:fixed; inset:0; z-index:98; display:none;
+    background:color-mix(in srgb, var(--bg) 80%, transparent);
+    backdrop-filter:blur(3px);
+  }
+  #diagBackdrop.open{display:block;}
+
+  .diagram-wrap.diag-active{
+    position:fixed; inset:26px; z-index:99;
+    background:var(--surface); border:1px solid var(--line-strong); border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+    display:flex; flex-direction:column; margin:0;
+  }
+  .diag-toolbar{
+    display:none; align-items:center; gap:8px; padding:10px 14px;
+    border-bottom:1px solid var(--line); flex:none;
+  }
+  .diagram-wrap.diag-active .diag-toolbar{display:flex;}
+  .diagram-wrap.diag-active .expand-btn{display:none;}
+  .diag-toolbar .diag-title{font-family:var(--mono); font-size:11.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em;}
+  .diag-toolbar .spacer{flex:1;}
+  .diag-toolbar button{
+    font-family:var(--mono); font-size:14px; background:var(--surface-2); color:var(--ink);
+    border:1px solid var(--line); border-radius:7px; width:28px; height:28px; cursor:pointer; line-height:1;
+  }
+  .diag-toolbar button:hover{border-color:var(--accent); color:var(--accent);}
+  .diag-toolbar button.close-btn{width:auto; padding:0 12px; font-family:var(--sans); font-weight:500; font-size:12.5px;}
+
+  .diagram-wrap.diag-active pre.mermaid{
+    flex:1; margin:0; border:none; box-shadow:none; border-radius:0;
+    overflow:auto; cursor:default; display:flex; justify-content:center; padding:26px;
+  }
+  .diagram-wrap.diag-active pre.mermaid > svg{
+    transform:scale(var(--diag-zoom, 1.5)); transform-origin:top center;
+    height:auto !important; flex:none;
+  }
+  body.diag-open{overflow:hidden;}
+
+  .flow-list{counter-reset:fl; list-style:none; padding:0; margin:0 0 16px;}
+  .flow-list li{counter-increment:fl; position:relative; padding:2px 0 16px 34px; border-left:2px solid var(--line); margin-left:12px;}
+  .flow-list li:last-child{border-left-color:transparent; padding-bottom:0;}
+  .flow-list li::before{content:counter(fl); position:absolute; left:-13px; top:0; width:24px; height:24px; border-radius:50%; background:var(--surface); border:2px solid var(--accent); color:var(--accent); font-family:var(--mono); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;}
+  .flow-list b{display:block; font-size:13.8px; margin-bottom:2px;}
+  .flow-list span.where{font-family:var(--mono); font-size:11.5px; color:var(--ink-faint);}
+
+  .term{display:grid; grid-template-columns:150px 1fr; gap:4px 16px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13.4px;}
+  .term dt{font-family:var(--mono); font-weight:600; color:var(--accent);}
+  .term dd{margin:0; color:var(--ink-dim);}
+
+  .closer{background:linear-gradient(155deg, var(--surface-2), var(--surface)); border:1px solid var(--line); border-radius:14px; padding:26px 28px; margin-top:6px;}
+  .closer h3{font-size:19px; margin-bottom:10px;}
+
+  footer.doc-foot{padding:30px 0 10px; color:var(--ink-faint); font-size:12px; font-family:var(--mono);}
+
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--line-strong); border-radius:6px;}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="toc" id="tocNav">
+    <div class="toc-brand"><span class="dot"></span><b>LUMIN</b></div>
+    <div class="toc-sub">System-design walkthrough</div>
+    <div class="toc-clock">Interview budget <b>~28 min</b></div>
+    <ol class="toc-list">
+      <li><a href="#s0">Framing <span class="toc-tag">0:00</span></a></li>
+      <li><a href="#s1">Requirements <span class="toc-tag">0:02</span></a></li>
+      <li><a href="#s-usecase">Worked use case <span class="toc-tag">0:04</span></a></li>
+      <li><a href="#s2">Architecture <span class="toc-tag">0:07</span></a></li>
+      <li><a href="#s3">Folder layout <span class="toc-tag">0:10</span></a></li>
+      <li><a href="#s4">The core bet: a fixed LangGraph, not an autonomous agent <span class="toc-tag">0:12</span></a></li>
+      <li><a href="#s5">Data source ingestion &amp; federation <span class="toc-tag">0:15</span></a></li>
+      <li><a href="#s6">The SQL agent loop (LLM I/O) <span class="toc-tag">0:18</span></a></li>
+      <li><a href="#s7">Hybrid RAG for documents <span class="toc-tag">0:20</span></a></li>
+      <li><a href="#s8">Tasks, auth &amp; the frontend shell <span class="toc-tag">0:22</span></a></li>
+      <li><a href="#s9">Naming the architecture <span class="toc-tag">0:23</span></a></li>
+      <li><a href="#s-lld">LLD &amp; best practices <span class="toc-tag">0:24</span></a></li>
+      <li><a href="#s-obs">Observability <span class="toc-tag">0:25</span></a></li>
+      <li><a href="#s-map">End-to-end &amp; storage map <span class="toc-tag">0:26</span></a></li>
+      <li><a href="#s-scale">Scaling, cost &amp; evals <span class="toc-tag">0:27</span></a></li>
+      <li><a href="#s-deploy">Deployment <span class="toc-tag">0:27</span></a></li>
+      <li><a href="#s-tradeoffs">Tradeoffs / closing <span class="toc-tag">0:28</span></a></li>
+      <li><a href="#s-glossary">Glossary</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="kicker">Interview walkthrough &middot; full stack, backend-weighted</div>
+      <h1>How I'd explain <em>LUMIN</em> in 28 minutes</h1>
+      <p class="lede">This is a script for narrating LUMIN out loud in a system-design interview: state the requirements, trace one real request end to end, then land on the architecture diagram so it reads as "the thing I just traced" instead of an abstract box chart. From there it drills into the one decision everything else hangs off, then each subsystem, then LLD, gaps, and cost.</p>
+      <div class="hero-meta">
+        <span>Subject: <b>LLM-powered natural-language data analyst (FastAPI + LangGraph + React)</b></span>
+        <span>Scope: <b>backend workflow &amp; data layer are the focus; frontend covered at the component/state level, not pixel-by-pixel</b></span>
+        <span>Style: <b>point-by-point</b>, diagrams inline</span>
+      </div>
+    </header>
+
+    <!-- ============ 0. FRAMING ============ -->
+    <section class="sec" id="s0">
+      <div class="sec-head"><span class="sec-num">00</span><h2>How to run this in the room</h2><span class="sec-time">0:00&ndash;0:02</span></div>
+      <p class="sec-dek">Say the one-liner first, state the constraints that shape every later decision, then point at the architecture diagram early — it's the map I keep returning to.</p>
+
+      <ul class="pt tight">
+        <li><b>One-liner:</b> LUMIN lets a user upload a spreadsheet, point at a live SQL database, or drop a PDF, then ask questions about it in plain English — the backend turns the question into a SQL query (or a hybrid document retrieval), runs it, and returns both a written answer and a chart recommendation, streamed back token-by-node as it's produced.</li>
+        <li><b>Constraints that shape this:</b> single developer, Groq as the primary (free-tier-friendly, fast-inference) LLM provider, Docker Compose on one host, Postgres/pgvector as the only datastore — so every design choice below is "what's the simplest thing that's still correct," not "what scales to a million users."</li>
+        <li><b>I'll volunteer gaps as I go</b> rather than wait to be caught: there's no automated test suite to speak of, no query-level authorization check on cross-user data access, and the SQL-generation step trusts the LLM's output enough that injection is a real, named risk — I'll get to each of those in place, not gloss over them.</li>
+      </ul>
+
+      <div class="callout"><span class="icon">Why lead with the trace</span>
+        <p>An architecture diagram shown cold is just boxes and arrows. Walking one concrete question through the system first means the diagram in Section 3 lands as recognition, not new information — that's the order this doc follows too.</p>
+      </div>
+    </section>
+
+    <!-- ============ 1. REQUIREMENTS ============ -->
+    <section class="sec" id="s1">
+      <div class="sec-head"><span class="sec-num">01</span><h2>Requirements</h2><span class="sec-time">0:02&ndash;0:04</span></div>
+      <p class="sec-dek">Functional scope first, then the non-functional constraints that later decisions get justified against.</p>
+
+      <h3 class="sub">Functional</h3>
+      <ul class="pt tight">
+        <li>Connect a data source: upload a CSV/Excel file, point at a live SQL connection string, or upload a PDF/text document.</li>
+        <li>Ask a question in plain English about one data source, get back a natural-language answer plus, when appropriate, a chart (bar/line/pie/scatter/horizontal-bar) with the data pre-shaped for it.</li>
+        <li>Ask a question that spans <em>multiple</em> connected sources at once (e.g. "join my uploaded marketing CSV against the orders table in my Postgres DB") and get one federated answer.</li>
+        <li>Chat conversationally when the question isn't about the data at all, and let that same conversational turn create/update/list/delete lightweight "tasks" (a personal todo list that can optionally reference a dataset).</li>
+        <li>Persist conversations and replay history; manage data sources (list, delete, get AI-suggested starter questions, run an automated "data health" check).</li>
+        <li>Basic email/password auth with JWT sessions.</li>
+      </ul>
+
+      <h3 class="sub">Non-functional</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Constraint</th><th>What it actually means here</th></tr></thead>
+        <tbody>
+          <tr><td>Low latency to <em>first token</em></td><td>Responses stream as newline-delimited JSON (NDJSON) per LangGraph node, not as one blocking call — the user sees "parsing question" before the SQL even exists.</td></tr>
+          <tr><td>Provider-agnostic LLM layer</td><td>Groq, OpenAI, HuggingFace, and Ollama are all wireable through one small factory class; only Groq is exercised end-to-end today.</td></tr>
+          <tr><td>Single-tenant-per-request isolation</td><td>Every table a user creates gets a UUID-suffixed name and a <code class="inline">data_sources</code> row scoped to <code class="inline">user_id</code> — but see the known gap in §5 on how far that isolation actually reaches.</td></tr>
+          <tr><td>Cheap to run</td><td>No dedicated vector index infra beyond pgvector-in-Postgres; DuckDB is used in-process, on demand, rather than standing up a separate OLAP service.</td></tr>
+          <tr><td>Extensible query surface</td><td>New data source types (NoSQL, more document formats) should slot in without rewriting the LangGraph — the workflow is schema-driven, not source-type-driven.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ============ WORKED USE CASE ============ -->
+    <section class="sec" id="s-usecase">
+      <div class="sec-head"><span class="sec-num">02</span><h2>A worked use case</h2><span class="sec-time">0:04&ndash;0:07</span></div>
+      <p class="sec-dek">One concrete request, traced end to end, before the architecture diagram — so the diagram reads as "oh, that's the thing I just traced."</p>
+
+      <p>A user has already uploaded <code class="inline">sales_q3.csv</code> (now table <code class="inline">sales_q3_a1b2c3d4</code> in Postgres) and asks: <em>"What were total sales by region last quarter?"</em> — the same shape of question the project's own demo uses against the <a href="https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce" target="_blank" rel="noopener">Brazilian E-commerce (Olist) dataset</a> loaded into SQLite/Postgres per <code class="inline">README.md</code>'s data-loading script.</p>
+
+      <ol class="flow-list">
+        <li><b>Frontend sends the question</b><span class="where">src/hooks/useChat.ts → POST /api/chat/v1/ask-question/:id</span> — a JWT-authenticated request carrying the question text, the conversation id, and the selected <code class="inline">dataset_id</code>.</li>
+        <li><b>Controller resolves the data source and starts a stream</b><span class="where">chat_controller.py → ask_question()</span> — looks up the <code class="inline">DataSources</code> row, saves the user's message, and (since exactly one source is selected) calls <code class="inline">execute_workflow()</code>.</li>
+        <li><b>Schema is introspected fresh, every call</b><span class="where">db_config.py → DB.get_schemas()</span> — SQLAlchemy's inspector reads live column names/types for <code class="inline">sales_q3_a1b2c3d4</code>. No cached schema means no staleness bugs, at the cost of one extra round trip per question.</li>
+        <li><b>The LangGraph runs, streaming each node's output</b><span class="where">sql_workflow.py → WorkflowManager.create_workflow()</span> — parse question → generate SQL → validate/fix SQL → execute → (format answer &amp; choose visualization in parallel) → format chart data. Each node's return value is yielded to the client the instant it's produced.</li>
+        <li><b>SQL executes against the source table</b><span class="where">sql_workflow.py → run_sql_query()</span> — <code class="inline">SELECT region, SUM(total) FROM "sales_q3_a1b2c3d4" WHERE ... GROUP BY region</code>, cleaned of markdown fencing and backticks first.</li>
+        <li><b>Two LLM calls run off the same result</b><span class="where">sql_agent.py → format_results / choose_visualization</span> — one turns rows into a one-sentence answer with the key number bolded, the other recommends a chart type and reasons about why.</li>
+        <li><b>The whole exchange is persisted as one assistant message</b><span class="where">chat_utils.py → save_message()</span> — every streamed node's JSON is concatenated into <code class="inline">Messages.content</code> once the stream completes, so history replay can reconstruct the full step-by-step trace, not just the final answer.</li>
+        <li><b>Frontend renders progressively</b><span class="where">src/pages/chat.tsx, src/components/steps/*</span> — a "steps" UI shows relevant tables, the generated SQL, and finally the chart component, as each NDJSON line arrives.</li>
+      </ol>
+
+      <div class="callout"><span class="icon">Why stream per-node, not per-token</span>
+        <p>Token-level streaming would need a proxy into the LLM provider's own stream for every node, multiplied across 5+ LLM calls in one question. Streaming the LangGraph's own node boundaries is coarser but far simpler, and it still gives the frontend the "show your work" UX (relevant tables → SQL → results → chart) that matters more here than raw typing-effect speed.</p>
+      </div>
+    </section>
+
+    <!-- ============ 3. ARCHITECTURE ============ -->
+    <section class="sec" id="s2">
+      <div class="sec-head"><span class="sec-num">03</span><h2>High-level architecture</h2><span class="sec-time">0:07&ndash;0:10</span></div>
+      <p class="sec-dek">One diagram everything else in this doc plugs back into.</p>
+
+      <pre class="mermaid">
+flowchart TB
+    subgraph Client["React SPA (Vite + Zustand + React Query)"]
+        UI["chat.tsx / dataSource.tsx / todos.tsx"]
+    end
+
+    subgraph API["FastAPI (single process, Uvicorn)"]
+        MW["AuthMiddleware (JWT) + SlowAPI rate limiter + CORS"]
+        Routes["Routers: auth / chat / data-pipeline / tasks"]
+        Ctrl["Controllers"]
+    end
+
+    subgraph Orchestration["LangGraph orchestration"]
+        WF["SQLWorkflow (StateGraph)"]
+        TA["TaskAgent (keyword + single LLM call)"]
+    end
+
+    subgraph LLMLayer["LLM provider layer"]
+        LLMF["LLM factory (Groq default; OpenAI/Ollama/HF wireable)"]
+    end
+
+    subgraph Data["Postgres + pgvector (system DB)"]
+        SysTables[("users / data_sources / conversations / messages / tasks")]
+        UserTables[("uploaded spreadsheet tables")]
+        VecTables[("langchain_pg_collection / langchain_pg_embedding")]
+    end
+
+    ExtDB[("External SQL DB\n(user-supplied connection string)")]
+    DuckDB["DuckDB in-memory\n(federated join engine)"]
+
+    UI -->|JWT bearer + NDJSON stream| MW --> Routes --> Ctrl
+    Ctrl -->|single source| WF
+    Ctrl -->|multi source| WF
+    Ctrl -->|task-shaped question| TA
+    WF --> LLMF
+    TA --> LLMF
+    WF -->|schema introspection + query exec| SysTables
+    WF -->|schema introspection + query exec| UserTables
+    WF -.->|when source.type == url| ExtDB
+    WF -.->|when >1 source involved| DuckDB
+    DuckDB -.-> UserTables
+    DuckDB -.-> ExtDB
+    Ctrl -->|document chat| VecTables
+
+    classDef ext fill:#f9f,stroke:#333,stroke-width:1px
+    class ExtDB ext
+      </pre>
+
+      <div class="callout"><span class="icon">Why one Postgres for everything</span>
+        <p>App metadata, uploaded tabular data, and vector embeddings (via pgvector) all live in the same Postgres instance. That's one connection pool, one backup story, and one docker-compose service — the right call at this scale. It also means uploaded user data and system metadata share a database (not just a server), which is the seed of the tenancy gap called out in §5.</p>
+      </div>
+    </section>
+
+    <!-- ============ 4. FOLDER LAYOUT ============ -->
+    <section class="sec" id="s3">
+      <div class="sec-head"><span class="sec-num">04</span><h2>Folder layout</h2><span class="sec-time">0:10&ndash;0:12</span></div>
+      <p class="sec-dek">The architecture diagram made walkable — being able to point at "where's X handled" and land on one directory every time is itself a design signal.</p>
+
+      <div class="grid2">
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent)"></span>backend/app/</h4>
+          <ul>
+            <li><code class="inline">api/routes</code> → <code class="inline">api/controllers</code> → thin, request-shaped orchestration only</li>
+            <li><code class="inline">api/db/*</code> — one SQLAlchemy <code class="inline">Table</code> definition per domain object (users, data_sources, chat_history, tasks)</li>
+            <li><code class="inline">api/validators</code> — Pydantic request schemas, one file per feature</li>
+            <li><code class="inline">api/middleware</code> — JWT auth middleware</li>
+            <li><code class="inline">langgraph/agents</code> — <code class="inline">SQLAgent</code>, <code class="inline">TaskAgent</code>: the LLM-calling classes</li>
+            <li><code class="inline">langgraph/workflows</code> — <code class="inline">WorkflowManager</code>: wires agent methods into a <code class="inline">StateGraph</code></li>
+            <li><code class="inline">langgraph/prompt_templates</code> — every prompt, kept out of agent logic</li>
+            <li><code class="inline">config</code> — <code class="inline">DB</code>/<code class="inline">VectorDB</code> (data access), <code class="inline">LLM</code> (provider factory), env, logging</li>
+            <li><code class="inline">utils</code> — the actual per-feature glue (<code class="inline">chat_utils.py</code>, <code class="inline">task_utils.py</code>) that controllers delegate to</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent-2)"></span>src/ (frontend)</h4>
+          <ul>
+            <li><code class="inline">pages/*</code> — one route each (chat, dataSource, chatHistory, todos, settings, auth)</li>
+            <li><code class="inline">zustand/stores</code> — client state (chats, datasets, tasks, user)</li>
+            <li><code class="inline">zustand/apis</code> — one axios wrapper module per backend resource</li>
+            <li><code class="inline">hooks/*</code> — React Query mutations/queries wrapping the api modules</li>
+            <li><code class="inline">components/steps</code> — renders the "show your work" trace (relevant tables → SQL → chart)</li>
+            <li><code class="inline">components/graphs</code> — Chart.js/Recharts wrappers keyed by <code class="inline">recommended_visualization</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <p>The backend follows a consistent <b>Route → Controller → Utils/Agent → DB</b> layering; every controller function has the same try/except/return-JSONResponse shape. That repetition is a little verbose, but it means an interviewer (or a new contributor) can predict the shape of any endpoint before opening it — a real, if unglamorous, design property.</p>
+
+      <h3 class="sub">Tech stack, at a glance</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent-2)"></span>Frontend</h4>
+          <ul>
+            <li><code class="inline">vite</code> + <code class="inline">typescript</code> + <code class="inline">tailwindcss</code></li>
+            <li><code class="inline">zustand</code> (client state) + <code class="inline">@tanstack/react-query</code> (server state/mutations)</li>
+            <li><code class="inline">react-router-dom</code>, <code class="inline">axios</code>, <code class="inline">react-hook-form</code>, <code class="inline">react-toastify</code></li>
+            <li><code class="inline">chart.js</code>/<code class="inline">react-chartjs-2</code> + <code class="inline">recharts</code> for the two chart-rendering paths, <code class="inline">prismjs</code> for SQL syntax highlighting in the "steps" trace</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent)"></span>Backend</h4>
+          <ul>
+            <li><code class="inline">fastapi</code> + <code class="inline">uvicorn</code>, <code class="inline">pydantic</code> for request validation, <code class="inline">slowapi</code> for rate limiting</li>
+            <li><code class="inline">langchain</code> + <code class="inline">langgraph</code> + provider packages (<code class="inline">langchain-groq</code>, <code class="inline">-openai</code>, <code class="inline">-ollama</code>, <code class="inline">-huggingface</code>)</li>
+            <li><code class="inline">sqlalchemy</code> + <code class="inline">alembic</code> (listed, not yet wired — §15) + <code class="inline">psycopg2-binary</code>/<code class="inline">mysql-connector-python</code> for external DB connections</li>
+            <li><code class="inline">pgvector</code> + <code class="inline">langchain_postgres</code> (vector store), <code class="inline">rank_bm25</code> (keyword retriever), <code class="inline">duckdb</code> (federation), <code class="inline">pandas</code>, <code class="inline">pypdf</code></li>
+            <li><code class="inline">passlib</code> + <code class="inline">pyjwt</code> for auth, <code class="inline">fastapi-mail</code> for email utilities</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout"><span class="icon">Non-goal, by design</span>
+        <p>NoSQL databases are explicitly out of scope today — the entire schema-introspection path (<code class="inline">DB.get_schemas</code>) leans on SQLAlchemy's relational inspector, which has no equivalent for a schema-less document store. Adding Mongo-style sources would mean a genuinely different code path, not a config flag.</p>
+      </div>
+    </section>
+
+    <!-- ============ 5. CORE BET ============ -->
+    <section class="sec" id="s4">
+      <div class="sec-head"><span class="sec-num">05</span><h2>The core bet: a fixed LangGraph, not an autonomous agent</h2><span class="sec-time">0:12&ndash;0:15</span></div>
+      <p class="sec-dek">The one decision every other subsystem hangs off — worth real weight since it's the most-probed thing in an actual interview.</p>
+
+      <p><b>The problem:</b> turning "what were total sales by region last quarter?" into a correct, safe SQL query and a sensible chart needs several LLM-assisted steps (understand intent → write SQL → validate SQL → decide how to visualize), and those steps have a natural dependency order.</p>
+
+      <p><b>What LUMIN does:</b> instead of giving one LLM a SQL-execution tool and letting it decide, in a loop, what to call next (the "autonomous ReAct agent" pattern), LUMIN hard-codes the step order as a LangGraph <code class="inline">StateGraph</code> — <code class="inline">parse_question → generate_sql → validate_and_fix_sql → execute_sql → {format_results, choose_visualization} → format_data_for_visualization</code> — with exactly one true branch point (<code class="inline">should_continue</code>, which routes irrelevant questions to a conversational reply instead of SQL generation).</p>
+
+      <pre class="mermaid">
+flowchart TD
+    Start([START]) --> ParseQuestion[Parse Question]
+    ParseQuestion --> ShouldContinue{is_relevant?}
+    ShouldContinue -->|Yes| GenSQL[Generate SQL Query]
+    GenSQL --> ValidateSQL[Validate and Fix SQL]
+    ValidateSQL --> ExecuteSQL[Execute SQL Query]
+    ExecuteSQL --> FormatResults[Format Results]
+    ExecuteSQL --> ChooseViz[Choose Visualization]
+    ChooseViz --> FormatViz[Format Data for Visualization]
+    ShouldContinue -->|No| ConvResponse[Conversational Response]
+    FormatResults --> End([END])
+    FormatViz --> End
+    ConvResponse --> End
+      </pre>
+
+      <div class="callout"><span class="icon">Why a fixed graph over a tool-calling agent</span>
+        <p>An autonomous agent gives the model freedom to re-plan, retry, or call tools in a different order — powerful, but non-deterministic and harder to stream meaningfully (you don't know what node is "next" until the model decides). A fixed graph gives up that flexibility in exchange for: predictable per-step streaming (the frontend's step-by-step UI depends on this), a validate-and-fix step that's guaranteed to run before every execution, and a much smaller prompt-injection surface, since the LLM never chooses which tool to invoke next — it only ever fills in the next node's expected output shape. The tradeoff accepted: if a question genuinely needs a variable number of steps (e.g. "try three different groupings and tell me which is most interesting"), this graph can't do that without a redesign.</p>
+      </div>
+
+      <div class="callout warn"><span class="icon">Known gap</span>
+        <p>"Validate and fix SQL" is itself an LLM call asked to judge and rewrite SQL from the same model family that generated it — there's no independent, non-LLM guard (e.g. an <code class="inline">EXPLAIN</code>-based dry run, or a SQL parser allow-listing statement types) between generation and execution. A sufficiently adversarial prompt could still produce a destructive statement that both generation and "validation" agree looks fine.</p>
+      </div>
+    </section>
+
+    <!-- ============ 6. DATA SOURCE INGESTION & FEDERATION ============ -->
+    <section class="sec" id="s5">
+      <div class="sec-head"><span class="sec-num">06</span><h2>Data source ingestion &amp; multi-source federation</h2><span class="sec-time">0:15&ndash;0:18</span></div>
+      <p class="sec-dek">How a file becomes a queryable table, and how questions that span sources get answered without a data warehouse.</p>
+
+      <h3 class="sub">Ingestion, by source type</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Type</th><th>What happens on upload</th><th>Where it lives</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">spreadsheet</td><td>pandas reads CSV/XLSX, lowercases &amp; underscore-normalizes column names, writes via <code class="inline">df.to_sql(if_exists='replace')</code> to a new table named <code class="inline">{filename}_{uuid8}</code></td><td>Postgres (system DB), one real table per upload</td></tr>
+          <tr><td class="mono">url</td><td>No data movement at all — just stores the connection string; <code class="inline">DB(connection_url)</code> is instantiated fresh per query</td><td>The user's own external database</td></tr>
+          <tr><td class="mono">document</td><td>pypdf/text extraction → <code class="inline">CharacterTextSplitter</code> (750 chars, 50 overlap) → HuggingFace sentence-transformer embeddings → <code class="inline">PGVector.from_documents()</code></td><td>pgvector tables (<code class="inline">langchain_pg_*</code>), one collection per upload</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 class="sub">Federated multi-source joins</h3>
+      <p>When a question is asked against more than one selected data source, <code class="inline">execute_multi_source_workflow()</code> builds a combined schema and a <code class="inline">source_map</code> (table name → connection URL, or the literal string <code class="inline">"system"</code>) and passes it into the same LangGraph. The graph doesn't know or care that it's multi-source — the branching happens one layer down, inside <code class="inline">run_sql_query()</code>: it string-matches which table names from <code class="inline">source_map</code> appear in the generated SQL, and if more than one distinct source is involved, it pulls each table into a Pandas DataFrame and registers it with an in-memory DuckDB connection, then runs the (Postgres-flavored) generated SQL against DuckDB instead.</p>
+
+      <pre class="mermaid">
+sequenceDiagram
+    participant WF as LangGraph node: execute_sql
+    participant SM as source_map
+    participant PG as Postgres (system + uploaded tables)
+    participant EXT as External SQL DB
+    participant DD as DuckDB (in-memory)
+
+    WF->>SM: which tables in this query map to which source?
+    alt exactly one source involved
+        WF->>PG: run query directly (or against EXT if it's a url source)
+    else more than one source involved
+        WF->>PG: SELECT * FROM table_a  (full fetch)
+        WF->>EXT: SELECT * FROM table_b (full fetch)
+        WF->>DD: register both as DataFrames
+        WF->>DD: execute the generated SQL against DuckDB
+        DD-->>WF: joined result
+    end
+      </pre>
+
+      <div class="callout"><span class="icon">Why DuckDB instead of a real federation layer</span>
+        <p>Standing up a federated query engine (Trino/Presto) for a project this size would be pure overkill. DuckDB embeds as a library, accepts Pandas DataFrames directly via zero-copy registration, and speaks enough SQL to run the LLM-generated query unmodified. The tradeoff: every join fetches full tables into memory first — there's no pushdown, no partial-fetch, so this only works while tables stay small.</p>
+      </div>
+
+      <div class="callout warn"><span class="icon">Known gap — tenant isolation</span>
+        <p>Table names are matched by a case-insensitive substring check against the raw SQL string (<code class="inline">table.lower() in cleaned_query.lower()</code>), not a parsed AST — a table name that happens to be a substring of another identifier could misroute. More importantly, nothing in <code class="inline">run_sql_query</code> re-checks that the requesting user actually owns every table implicated by the LLM's SQL; source-of-truth ownership is only checked once, when the data sources were originally selected in the controller.</p>
+      </div>
+    </section>
+
+    <!-- ============ 7. SQL AGENT LOOP / LLM I/O ============ -->
+    <section class="sec" id="s6">
+      <div class="sec-head"><span class="sec-num">07</span><h2>The SQL agent loop — what each LLM call actually sees</h2><span class="sec-time">0:18&ndash;0:20</span></div>
+      <p class="sec-dek">Every node in the graph is one LLM call with a fixed prompt template and a fixed output parser — documenting the actual I/O shape, since that's what makes the graph deterministic.</p>
+
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Node</th><th>Input</th><th>Output shape</th><th>Parser</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">parse_question</td><td>schema + question</td><td><code class="inline">{is_relevant, relevant_tables[]}</code></td><td>JSON</td></tr>
+          <tr><td class="mono">generate_sql</td><td>schema + question + parsed_question</td><td>raw SQL string, or literal <code class="inline">NOT_ENOUGH_INFO</code></td><td>plain string</td></tr>
+          <tr><td class="mono">validate_and_fix_sql</td><td>schema + sql_query</td><td><code class="inline">{valid, issues, corrected_query}</code></td><td>JSON</td></tr>
+          <tr><td class="mono">format_results</td><td>question + query_result rows</td><td>one sentence, key number in <code class="inline">**bold**</code></td><td>plain string</td></tr>
+          <tr><td class="mono">choose_visualization</td><td>question + sql_query + query_result</td><td><code class="inline">{recommended_visualization, reason}</code></td><td>JSON</td></tr>
+          <tr><td class="mono">format_data_for_visualization</td><td>question + query_result + chart type</td><td>chart-type-specific JSON (a different prompt per chart type, see <code class="inline">graph_prompts.py</code>)</td><td>JSON</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout"><span class="icon">Why structured JSON over parsing free text</span>
+        <p>Every node that needs anything beyond plain prose asks for strict JSON and runs it through LangChain's <code class="inline">JsonOutputParser</code>. That's a real, if soft, contract: it lets downstream nodes trust field names instead of regexing an LLM's prose. It's soft because Groq's LangChain integration here isn't using guaranteed structured-output/tool-calling mode — the prompts just instruct "no backticks, no code fences, valid JSON only" and hope the model complies, which is why <code class="inline">clean_sql_query()</code> still exists to strip markdown fences defensively.</p>
+      </div>
+
+      <div class="callout warn"><span class="icon">Known gap</span>
+        <p>None of the six prompts are few-shot-verified against the actual target LLM's JSON reliability at scale — a malformed JSON response from any JSON-parsed node raises an uncaught parser exception that bubbles up as a generic 500, not a graceful "let me try again" retry.</p>
+      </div>
+    </section>
+
+    <!-- ============ 8. HYBRID RAG ============ -->
+    <section class="sec" id="s7">
+      <div class="sec-head"><span class="sec-num">08</span><h2>Hybrid search for documents (RAG)</h2><span class="sec-time">0:20&ndash;0:22</span></div>
+      <p class="sec-dek">The document-chat path is a separate, simpler pipeline from the SQL one — no LangGraph, just LangChain's <code class="inline">RetrievalQA</code> with an ensemble retriever.</p>
+
+      <ul class="pt tight">
+        <li><b>Chunking:</b> 750-char chunks, 50-char overlap, split on newlines (<code class="inline">reader_utils.py</code>).</li>
+        <li><b>Retrieval is hybrid, not pure-vector:</b> a semantic retriever (pgvector similarity, k=2) is combined with a BM25 keyword retriever (also k=2, built by pulling every chunk for that collection back out of Postgres and indexing it in-memory) via LangChain's <code class="inline">EnsembleRetriever</code>, weighted 50/50.</li>
+        <li><b>Why hybrid at all:</b> pure semantic search misses exact-match lookups — a product SKU, an exact name — because embeddings cluster on <em>meaning</em>, not surface form. BM25 catches the literal string; the vector retriever catches paraphrase and concept-level questions. The ensemble's reciprocal-rank fusion means either retriever surfacing a chunk near the top is usually enough to get it into the final context.</li>
+        <li><b>Why k=2 per retriever, not more:</b> this is a direct application of the "lost in the middle" effect — Liu et al. (2023) show LLMs attend far more reliably to information near the start or end of the context window than to the same information buried mid-context, so a small, well-ranked context set (4 chunks max, post-fusion) tends to beat a large noisy one for a "stuff"-chain prompt that concatenates everything into one call.</li>
+      </ul>
+
+      <div class="callout warn"><span class="icon">Known gap</span>
+        <p><code class="inline">get_all_documents()</code> re-fetches and re-indexes the <em>entire</em> collection into a fresh in-memory BM25 index on every single question — there's no caching of the BM25 index across turns in a conversation, so a large document collection means real, repeated latency and memory cost per message.</p>
+      </div>
+
+      <div class="callout good"><span class="icon">What's done well</span>
+        <p>The BM25 import is wrapped in a try/except that falls back cleanly to vector-only retrieval if the optional dependency isn't available — the document-chat path degrades gracefully instead of hard-failing.</p>
+      </div>
+    </section>
+
+    <!-- ============ 9. TASKS, AUTH, FRONTEND ============ -->
+    <section class="sec" id="s8">
+      <div class="sec-head"><span class="sec-num">09</span><h2>Tasks, auth &amp; the frontend shell</h2><span class="sec-time">0:22&ndash;0:23</span></div>
+      <p class="sec-dek">Three smaller pieces, covered together since none needs its own diagram.</p>
+
+      <h3 class="sub">Tasks — a second, cheaper agent</h3>
+      <p>Task requests ("add a task to review the outliers") route through a separate <code class="inline">TaskAgent</code>, not the SQL graph. It's a keyword pre-filter (<code class="inline">task</code>, <code class="inline">todo</code>, <code class="inline">remind</code>, …) gating one single LLM call that returns an intent + action + structured task fields; CRUD then happens with plain SQLAlchemy, no further LLM involvement. This is a deliberate two-tier design: cheap, fast, deterministic routing before ever paying for an LLM call.</p>
+
+      <h3 class="sub">Auth</h3>
+      <p>Email/password with <code class="inline">passlib</code> hashing and a JWT (<code class="inline">HS256</code>, one shared <code class="inline">SECRET_KEY</code>) carrying only <code class="inline">{id}</code>. <code class="inline">AuthMiddleware</code> runs before every request except an explicit path allowlist (<code class="inline">/</code>, <code class="inline">/docs</code>, login, signup), decodes the token, and stashes <code class="inline">user_id</code> on <code class="inline">request.state</code>.</p>
+      <div class="callout warn"><span class="icon">Known gap</span>
+        <p>JWTs never expire meaningfully in practice (no refresh flow, no visible short TTL in <code class="inline">create_access_token</code> beyond whatever PyJWT default applies), and there's no token revocation/blacklist — a leaked token is valid until it naturally expires.</p>
+      </div>
+
+      <h3 class="sub">Frontend shell</h3>
+      <p>Zustand holds client state (chats, datasets, tasks, user) with no persistence middleware beyond what <code class="inline">localstorageUtils.ts</code> does manually for the auth token. React Query wraps every mutation for retry/loading/error state. Streaming responses are read via axios's <code class="inline">responseType: 'stream'</code> + <code class="inline">onDownloadProgress</code>, parsed as NDJSON client-side (<code class="inline">parseData()</code> in <code class="inline">utils.ts</code>) — a slightly unusual choice since the Fetch API's native <code class="inline">ReadableStream</code> is the more common way to consume SSE-shaped output, but it keeps every network call going through the same axios client and its auth-header injection.</p>
+    </section>
+
+    <!-- ============ 10. NAMING THE ARCHITECTURE ============ -->
+    <section class="sec" id="s9">
+      <div class="sec-head"><span class="sec-num">10</span><h2>Naming the architecture</h2><span class="sec-time">0:23&ndash;0:24</span></div>
+      <p class="sec-dek">Mapping what was just described onto the field's own vocabulary — including patterns deliberately not used.</p>
+
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Pattern</th><th>Where it shows up</th></tr></thead>
+        <tbody>
+          <tr><td><b>Pipeline / state machine</b></td><td>The LangGraph <code class="inline">StateGraph</code> itself — nodes are pure functions over a shared <code class="inline">AgentState</code> TypedDict, edges are the transition table.</td></tr>
+          <tr><td><b>Strategy pattern</b></td><td><code class="inline">LLM</code> factory (<code class="inline">.groq()</code>/<code class="inline">.openai()</code>/<code class="inline">.ollama()</code>) — callers depend on the <code class="inline">BaseLLM</code> interface, not a concrete provider.</td></tr>
+          <tr><td><b>Ensemble / mixture-of-retrievers</b></td><td>Hybrid RAG's <code class="inline">EnsembleRetriever</code> (BM25 + vector, reciprocal rank fusion).</td></tr>
+          <tr><td><b>Chain of responsibility (middleware)</b></td><td>Starlette's middleware stack: rate limiter → auth → CORS → route handler, each able to short-circuit.</td></tr>
+          <tr><td><b>Thin repository-ish wrapper</b></td><td><code class="inline">DB</code>/<code class="inline">VectorDB</code> classes — not a full Repository pattern (no per-entity repositories, controllers still write raw <code class="inline">select()</code> calls), but they do centralize connection/session lifecycle.</td></tr>
+          <tr><td><b>Deliberately not used: ReAct / tool-calling agent</b></td><td>Covered in §5 — the SQL path is a fixed graph, not a model choosing its own tool sequence. Note LUMIN's SQL-generation-then-validation shape is broadly similar, at a high level, to what's publicly described of tools like Vanna.ai's text-to-SQL pipeline — that's a coincidence of both projects converging on the same obvious tradeoff (deterministic pipeline over autonomous agent for SQL safety), not a claim of shared code or design lineage.</td></tr>
+          <tr><td><b>Deliberately not used: CQRS / event sourcing</b></td><td>Reads and writes go through the same SQLAlchemy tables with no separate read model — appropriate at this scale, would be reconsidered only if conversation history read load became a real bottleneck.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ============ 11. LLD ============ -->
+    <section class="sec" id="s-lld">
+      <div class="sec-head"><span class="sec-num">11</span><h2>LLD &amp; best practices</h2><span class="sec-time">0:24&ndash;0:25</span></div>
+      <p class="sec-dek">Zooming from architecture into the classes, schemas, and conventions an LLD round would actually probe.</p>
+
+      <h3 class="sub">Core classes</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent)"></span>WorkflowManager</h4>
+          <ul>
+            <li>Owns the compiled <code class="inline">StateGraph</code> and the shared <code class="inline">DB</code> handle</li>
+            <li><code class="inline">run_sql_query()</code> also does row serialization (<code class="inline">Decimal</code>→float, datetime→ISO string, bytes→utf-8) so JSON encoding downstream never has to think about SQLAlchemy row types</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent)"></span>SQLAgent</h4>
+          <ul>
+            <li>Every method does the same explicit <code class="inline">required_keys</code> check against <code class="inline">state</code> before touching it — a manual substitute for a validated state schema at each boundary</li>
+            <li>Each method builds a fresh <code class="inline">prompt | llm | parser</code> LangChain Expression Language chain per call rather than caching them — simple, slightly wasteful, never the bottleneck here</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent-2)"></span>AgentState (TypedDict)</h4>
+          <ul>
+            <li>Two fields (<code class="inline">answer</code>, <code class="inline">visualization</code>) are declared <code class="inline">Annotated[str, operator.add]</code> — LangGraph's reducer mechanism, so if two branches both wrote to the same key the graph concatenates rather than overwrites; used here mainly for the parallel <code class="inline">format_results</code>/<code class="inline">choose_visualization</code> fan-out</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent-2)"></span>DB / VectorDB</h4>
+          <ul>
+            <li><code class="inline">DB</code> is instantiated per-connection-string, not pooled/cached across requests — a new engine per external <code class="inline">url</code>-type source, every query</li>
+            <li><code class="inline">VectorDB</code> lazily initializes the embedding model once per process (module-level singleton pattern via <code class="inline">if self._embedding is None</code>)</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 class="sub">Conventions actually followed</h3>
+      <ul class="pt tight">
+        <li>Every controller function: <code class="inline">try / except HTTPException / except SQLAlchemyError / except Exception</code>, each returning a uniform <code class="inline">create_response(status_code, message, data)</code> envelope — consistent, if repetitive enough that a shared decorator would remove real duplication.</li>
+        <li>DB sessions are always opened via <code class="inline">with db.session() as session:</code> so commit/close happens deterministically, even on exceptions.</li>
+        <li>Prompts live entirely in <code class="inline">prompt_templates/</code>, never inlined in agent methods — keeps the "what does the model actually see" question answerable by reading one file per prompt.</li>
+      </ul>
+
+      <details class="deep">
+        <summary><b>If asked: why TypedDict instead of a Pydantic model for AgentState?</b> — a real tradeoff, not an oversight</summary>
+        <div class="deep-body">
+          <ul class="pt tight">
+            <li>LangGraph's <code class="inline">StateGraph</code> works natively with TypedDicts and merges partial dict returns from each node automatically — a Pydantic model would need either full-object reconstruction per node or a compatibility shim.</li>
+            <li>The cost: no runtime validation on state transitions — a node that returns a wrongly-typed value fails downstream, not at the point of the mistake.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 12. OBSERVABILITY ============ -->
+    <section class="sec" id="s-obs">
+      <div class="sec-head"><span class="sec-num">12</span><h2>Observability</h2><span class="sec-time">0:25&ndash;0:26</span></div>
+      <p class="sec-dek">What's actually logged today, and the honest gaps — no smoothing this over.</p>
+
+      <ul class="pt tight">
+        <li><code class="inline">logging_config.py</code> sets up <code class="inline">coloredlogs</code> at <code class="inline">DEBUG</code> globally (with a comment noting it should drop to <code class="inline">INFO</code> in production — it hasn't been changed) and every module gets its own named logger via <code class="inline">get_logger(__name__)</code>.</li>
+        <li>Several hot paths (<code class="inline">run_sql_query</code>, <code class="inline">DB.execute_query</code>, the auth middleware's token check) still use bare <code class="inline">print()</code> for debug output alongside the real logger — leftover from active development, not yet cleaned up.</li>
+        <li>LangChain/LangSmith tracing is wired in (<code class="inline">LANGCHAIN_PROJECT</code> env var is read and set) but explicitly disabled: <code class="inline">LANGCHAIN_TRACING_V2 = "false"</code> is hard-coded in <code class="inline">env.py</code>, so there is no per-run trace of prompts/completions/latencies today even though the plumbing exists to turn it on.</li>
+      </ul>
+
+      <div class="callout warn"><span class="icon">Known gap</span>
+        <p>No request-id/correlation-id threading through a request's logs, no structured (JSON) logging, no metrics (latency histograms, LLM token counts, error rates) exported anywhere. Debugging a production incident today means grepping <code class="inline">logs.txt</code> for nearby timestamps.</p>
+      </div>
+    </section>
+
+    <!-- ============ 13. END-TO-END / STORAGE MAP ============ -->
+    <section class="sec" id="s-map">
+      <div class="sec-head"><span class="sec-num">13</span><h2>End-to-end &amp; storage map</h2><span class="sec-time">0:26&ndash;0:27</span></div>
+      <p class="sec-dek">The question that ties every prior section together: what's stored where, and the full flow of the system's most complex path restated as one ordered list.</p>
+
+      <h3 class="sub">Schema, as five SQLAlchemy <code class="inline">Table</code> definitions</h3>
+      <pre class="mermaid">
+erDiagram
+    users ||--o{ data_sources : creates
+    users ||--o{ conversations : has
+    users ||--o{ tasks : owns
+    data_sources ||--o{ conversations : "used in"
+    data_sources ||--o{ tasks : "linked to"
+    conversations ||--o{ messages : contains
+
+    users {
+        int id PK
+        string name
+        string email UK
+        string hashed_password UK
+        datetime created_at
+    }
+    data_sources {
+        int id PK
+        int user_id FK
+        string name
+        string type
+        string table_name UK
+        string connection_url UK
+        datetime created_at
+    }
+    conversations {
+        int id PK
+        int user_id FK
+        int data_source_id FK
+        string title
+        datetime created_at
+        datetime updated_at
+    }
+    messages {
+        int id PK
+        int conversation_id FK
+        enum role
+        json content
+        datetime created_at
+        datetime updated_at
+    }
+    tasks {
+        int id PK
+        int user_id FK
+        int data_source_id FK
+        string title
+        string description
+        string status
+        string priority
+        datetime created_at
+        datetime updated_at
+    }
+      </pre>
+      <div class="callout"><span class="icon">Why unique on table_name / connection_url</span>
+        <p><code class="inline">data_sources.table_name</code> and <code class="inline">connection_url</code> both carry a <code class="inline">UNIQUE</code> constraint — a cheap way to prevent two <code class="inline">DataSources</code> rows from ever silently pointing at the same underlying table or connection string, at the cost of stopping two different users from independently connecting to the exact same external database URL (a real, if narrow, limitation worth naming if asked).</p>
+      </div>
+
+      <div class="storewrap tbl-wrap"><table>
+        <thead><tr><th>What</th><th>Where</th><th>Written by</th></tr></thead>
+        <tbody>
+          <tr><td>Users, password hashes</td><td>Postgres <code class="inline">users</code></td><td>auth_controller.signup</td></tr>
+          <tr><td>Data source metadata (name, type, table_name/connection_url)</td><td>Postgres <code class="inline">data_sources</code></td><td>data_pipeline_controller (upload/add handlers)</td></tr>
+          <tr><td>Uploaded spreadsheet rows</td><td>Postgres, one real table per upload, named <code class="inline">{file}_{uuid8}</code></td><td><code class="inline">DB.insert_dataframe</code></td></tr>
+          <tr><td>Document chunks + embeddings</td><td>Postgres <code class="inline">langchain_pg_collection</code> / <code class="inline">langchain_pg_embedding</code> (pgvector)</td><td><code class="inline">VectorDB.insert_data</code></td></tr>
+          <tr><td>Conversations &amp; per-turn messages</td><td>Postgres <code class="inline">conversations</code>, <code class="inline">messages</code> (content is JSON)</td><td>chat_controller / chat_utils.save_message</td></tr>
+          <tr><td>Tasks (todos)</td><td>Postgres <code class="inline">tasks</code></td><td>task_utils.execute_task_workflow</td></tr>
+          <tr><td>External user databases</td><td>Wherever the user's own connection string points — never copied in</td><td>n/a (read/write via live connection only)</td></tr>
+          <tr><td>JWT session</td><td>Browser <code class="inline">localStorage</code> (client-side only, never server-persisted)</td><td>localstorageUtils.ts</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 class="sub">Full path, restated: multi-source question → answer</h3>
+      <ol class="pt">
+        <li>Frontend POSTs question + <code class="inline">dataset_ids[]</code> — <span class="mono">chat.tsx → chatApi.ts</span></li>
+        <li>AuthMiddleware verifies JWT, attaches <code class="inline">user_id</code> — <span class="mono">auth_middleware.py</span></li>
+        <li>Controller resolves all requested <code class="inline">DataSources</code> rows, detects &gt;1 → routes to federation — <span class="mono">chat_controller.ask_question</span></li>
+        <li>Schemas collected across sources; <code class="inline">source_map</code> built (table→connection) — <span class="mono">chat_utils.execute_multi_source_workflow</span></li>
+        <li>LangGraph runs: parse → generate SQL → validate/fix → execute — <span class="mono">sql_workflow.py</span></li>
+        <li><code class="inline">run_sql_query</code> detects &gt;1 source touched by the SQL, spins up DuckDB, fetches + registers DataFrames, executes join — <span class="mono">sql_workflow.run_sql_query</span></li>
+        <li>Result rows format into an answer + a visualization recommendation, in parallel — <span class="mono">sql_agent.py</span></li>
+        <li>Every streamed node is concatenated and persisted as one assistant <code class="inline">Messages</code> row — <span class="mono">chat_utils.save_message</span></li>
+        <li>Frontend renders the steps trace + final chart as NDJSON lines arrive — <span class="mono">chat.tsx, components/steps/*</span></li>
+      </ol>
+    </section>
+
+    <!-- ============ 14. SCALING, COST & EVALS ============ -->
+    <section class="sec" id="s-scale">
+      <div class="sec-head"><span class="sec-num">14</span><h2>Future work: scaling, cost &amp; evals</h2><span class="sec-time">0:27&ndash;0:27</span></div>
+      <p class="sec-dek">What's not needed at today's actual scale, but naming what would change and why is what's being checked for here.</p>
+
+      <h3 class="sub">Cost, with real numbers</h3>
+      <p>LUMIN's primary provider is Groq. As of the pricing checked for this doc (self-serve tier, per the Groq/Helicone pricing pages):</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Model (used in code today)</th><th>Input</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">llama-3.1-8b-instant</td><td>$0.05 / 1M tokens</td><td>$0.08 / 1M tokens</td></tr>
+          <tr><td class="mono">llama-3.3-70b-versatile</td><td>$0.59 / 1M tokens</td><td>$0.79 / 1M tokens</td></tr>
+        </tbody>
+      </table></div>
+      <p>A single "ask a question" turn against one data source makes 4–5 LLM calls (parse, generate SQL, validate, format results, choose viz, format viz data) — at a few hundred tokens each, that's low-single-digit-cents even on the larger model. The real cost driver at scale would be volume of turns, not per-turn token count.</p>
+      <div class="callout"><span class="icon">Source, dated</span>
+        <p>Groq self-serve pricing checked September 2026 via Helicone's Groq pricing calculators and Groq's own published rate card. Note: several Groq models (including both used here) reportedly moved to enterprise "contact sales" pricing in late August 2026 per third-party trackers — worth re-verifying current self-serve availability before quoting these numbers as current.</p>
+      </div>
+
+      <h3 class="sub">Scaling — not needed today, but here's what would change</h3>
+      <ul class="pt tight">
+        <li><b>DuckDB federation fetches full tables into memory.</b> Fine at demo scale (Olist dataset, low-millions of rows); breaks down once any joined table doesn't fit in the API process's RAM. Fix: push filter/aggregation predicates down before the fetch, or cap fetched row counts.</li>
+        <li><b>One FastAPI process, no worker pool declared in the Dockerfile's dev command.</b> Uvicorn's default single-worker mode means concurrent streaming requests share one event loop — fine for async I/O-bound LLM calls, but CPU-bound work (pandas joins, BM25 indexing) would block other requests. Multiple Uvicorn workers behind a load balancer is the obvious next step.</li>
+        <li><b>No caching layer.</b> Schema introspection and BM25 index-building both re-run from scratch on every single question. A Redis-backed schema cache (invalidated on data source upload/delete) and a per-collection BM25 index cache would cut the most repeated work.</li>
+      </ul>
+
+      <h3 class="sub">Evals — the honest gap</h3>
+      <div class="callout warn"><span class="icon">Not yet done</span>
+        <p>There is no evaluation harness — no held-out set of (question, expected SQL or expected answer) pairs, no automated check that a prompt change didn't regress SQL-generation accuracy. <code class="inline">backend/app/tests/</code> exists but covers DB config and one SQL-agent unit test, not end-to-end correctness. Given LangSmith tracing is already wired (just disabled), the natural next step is turning tracing on and building a small golden-question eval set against it before iterating further on prompts.</p>
+      </div>
+
+      <h3 class="sub">Project's own roadmap (README) vs. what the code shows today</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>README says</th><th>What's actually in the code</th></tr></thead>
+        <tbody>
+          <tr><td>"Document Analysis Integration — Backend Ready, Needs Frontend Implementation"</td><td>Stale: <code class="inline">UploadFile.tsx</code> already accepts and routes PDF/TXT uploads to <code class="inline">useUploadDocumentMutation</code>, which hits the working <code class="inline">upload_document</code> endpoint end-to-end.</td></tr>
+          <tr><td>"Contextual Chat Enhancement — Needs Implementation" (pgvector similarity, relevance scoring, context window management)</td><td>Accurate: the hybrid retriever in §8 <em>is</em> the pgvector similarity piece, but there's still no cross-turn conversation memory feeding back into retrieval — each question is answered independently of prior turns in the same conversation.</td></tr>
+          <tr><td>"Implement NoSQL Database Support — Needs Implementation"</td><td>Accurate — see the non-goal callout in §4.</td></tr>
+          <tr><td>"User Settings Dashboard — Needs Implementation" (profile mgmt, LLM/model selection per user)</td><td>Accurate: <code class="inline">settings.tsx</code> exists as a route but the per-user LLM-provider/model choice described in the README isn't wired to a persisted preference — <code class="inline">llm_model</code> is passed per-request from the frontend today, not stored.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><span class="icon">Why call this out explicitly</span>
+        <p>A README's roadmap section is a snapshot from whenever it was last edited — treating it as ground truth without checking the code is exactly the kind of gap this doc tries not to have. Cross-checking it against <code class="inline">UploadFile.tsx</code> surfaced one claim that's simply out of date.</p>
+      </div>
+    </section>
+
+    <!-- ============ 15. DEPLOYMENT ============ -->
+    <section class="sec" id="s-deploy">
+      <div class="sec-head"><span class="sec-num">15</span><h2>Deployment</h2><span class="sec-time">0:27&ndash;0:28</span></div>
+      <p class="sec-dek">What actually ships today vs. the concrete next step past one developer's laptop.</p>
+
+      <ul class="pt tight">
+        <li><b>Today:</b> <code class="inline">docker-compose.yml</code> — three services (backend, frontend, <code class="inline">ankane/pgvector</code> Postgres image), backend runs <code class="inline">uvicorn --reload</code> with the source bind-mounted, frontend runs <code class="inline">npm run dev</code>. This is explicitly a dev-mode compose file, not a production one (hot-reload flags, no build-and-serve step for the frontend, hard-coded default DB credentials).</li>
+        <li><b>Schema management:</b> <code class="inline">init_db()</code> calls SQLAlchemy's <code class="inline">meta.create_all(engine)</code> on startup — additive-only, no migration history. <code class="inline">alembic</code> is a listed dependency but there's no <code class="inline">alembic/</code> migrations directory in the repo, so it isn't actually wired up yet; any schema change today means manually altering the running database or dropping/recreating it.</li>
+        <li><b>Concrete next step:</b> a production Dockerfile target (there's already a <code class="inline">backend-dev</code> build target referenced in compose, implying a prod target is anticipated), Alembic migrations actually initialized and run as a deploy step, secrets out of <code class="inline">.env</code> and into a real secrets manager, and CORS narrowed from <code class="inline">allow_origins=["*"]</code> to the real frontend origin.</li>
+      </ul>
+    </section>
+
+    <!-- ============ 16. TRADEOFFS / CLOSING ============ -->
+    <section class="sec" id="s-tradeoffs">
+      <div class="sec-head"><span class="sec-num">16</span><h2>Tradeoffs &amp; what I'd change next</h2><span class="sec-time">0:28&ndash;0:28</span></div>
+      <p class="sec-dek">Closing section, in the interviewer's own words: strengths, weaknesses, and the one thing I'd fix first.</p>
+
+      <div class="closer">
+        <h3>If I had to pick one thing to fix first</h3>
+        <p><b>SQL execution safety.</b> Right now, "validate and fix" is an LLM call from the same family that generated the query — not an independent guard. I'd add a real allow-list layer between generation and execution: parse the generated SQL with <code class="inline">sqlglot</code> or similar, reject anything that isn't a <code class="inline">SELECT</code> against tables the requesting user actually owns (cross-checked against <code class="inline">data_sources</code>, not just string-matched against <code class="inline">source_map</code>), and only then hand it to the LLM-based "fix" step for genuine syntax repair.</p>
+      </div>
+
+      <div class="grid2" style="margin-top:20px;">
+        <div class="card">
+          <h4><span class="dot" style="background:var(--accent-2)"></span>Strengths</h4>
+          <ul>
+            <li>The fixed-graph design for SQL generation is the right call for streaming UX and predictability, and it's applied consistently.</li>
+            <li>Hybrid retrieval (BM25 + vector) for documents is a genuinely good, well-justified choice, not cargo-culted.</li>
+            <li>Clean provider-agnostic LLM factory and a consistent controller error-handling shape make the codebase predictable to extend.</li>
+            <li>DuckDB-based federation solves a real, non-trivial "join across two live sources" problem with minimal added infrastructure.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="dot" style="background:var(--danger)"></span>Weaknesses</h4>
+          <ul>
+            <li>SQL execution trusts the LLM more than it should (§5, §6).</li>
+            <li>No cross-request caching (schema, BM25 index) means repeated, avoidable latency on every single question.</li>
+            <li>No eval harness, despite tracing infra already being present but switched off.</li>
+            <li>Migrations (Alembic) are a dependency, not a working system yet — schema changes are manual today.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GLOSSARY ============ -->
+    <section class="sec" id="s-glossary">
+      <div class="sec-head"><span class="sec-num">17</span><h2>Glossary</h2></div>
+      <dl>
+        <div class="term"><dt>LangGraph</dt><dd>The state-machine orchestration library LUMIN uses to wire the SQL agent's steps into a <code class="inline">StateGraph</code> with explicit nodes and edges — this project uses it for a fixed pipeline, not an autonomous agent loop.</dd></div>
+        <div class="term"><dt>AgentState</dt><dd>The <code class="inline">TypedDict</code> shared across every LangGraph node in <code class="inline">sql_workflow.py</code>; each node returns a partial dict that LangGraph merges into it, using reducers (<code class="inline">operator.add</code>) for the fields two branches might both write.</dd></div>
+        <div class="term"><dt>Hybrid search</dt><dd>Combining BM25 (keyword/exact-match) retrieval with dense vector (semantic) retrieval via an <code class="inline">EnsembleRetriever</code>, used for LUMIN's document-chat path so exact identifiers aren't lost to pure semantic search.</dd></div>
+        <div class="term"><dt>Lost in the middle</dt><dd>The empirical finding (Liu et al., 2023) that LLMs attend more reliably to context near the start/end of a prompt than to the same information buried mid-context — the reason LUMIN's retrievers are capped at k=2 each rather than stuffing in more chunks.</dd></div>
+        <div class="term"><dt>pgvector</dt><dd>The Postgres extension used as LUMIN's only vector store — document embeddings live in the same database as every other table, via LangChain's <code class="inline">PGVector</code> integration.</dd></div>
+        <div class="term"><dt>DuckDB federation</dt><dd>LUMIN's approach to multi-source joins: pull each involved table into a Pandas DataFrame, register it with an in-memory DuckDB connection, and run the LLM-generated SQL there instead of against either source database directly.</dd></div>
+        <div class="term"><dt>source_map</dt><dd>The dict built per multi-source question mapping each involved table name to its origin (a connection URL, or the literal string <code class="inline">"system"</code> for the app's own Postgres) — how <code class="inline">run_sql_query</code> decides whether a question needs federation.</dd></div>
+        <div class="term"><dt>NDJSON streaming</dt><dd>LUMIN streams each LangGraph node's output as one JSON object per line over <code class="inline">StreamingResponse</code>, rather than token-level streaming from the LLM itself — coarser, but matches the frontend's step-by-step "show your work" UI.</dd></div>
+        <div class="term"><dt>Strategy pattern (LLM factory)</dt><dd>The <code class="inline">LLM</code> class in <code class="inline">llm_config.py</code> — callers get back a <code class="inline">BaseLLM</code>-compatible object regardless of whether <code class="inline">.groq()</code>, <code class="inline">.openai()</code>, or <code class="inline">.ollama()</code> was called, so the rest of the codebase never branches on provider.</dd></div>
+      </dl>
+    </section>
+
+    <footer class="doc-foot">LUMIN &middot; MIT licensed &middot; interview walkthrough doc &middot; generated from a read of the actual backend/frontend source, not inferred from file names</footer>
+  </main>
+</div>
+
+<div id="diagBackdrop"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+    fontFamily: 'IBM Plex Mono, ui-monospace, monospace'
+  });
+</script>
+
+<script>
+(function(){
+  var backdrop = document.getElementById('diagBackdrop');
+  var activeWrap = null;
+  var zoom = 1.5;
+
+  function applyZoom(pre){ pre.style.setProperty('--diag-zoom', zoom); }
+
+  function closeDiagram(){
+    if (!activeWrap) return;
+    activeWrap.classList.remove('diag-active');
+    backdrop.classList.remove('open');
+    document.body.classList.remove('diag-open');
+    activeWrap = null;
+  }
+
+  function openDiagram(wrap, pre){
+    if (activeWrap) closeDiagram();
+    activeWrap = wrap;
+    zoom = 1.5;
+    applyZoom(pre);
+    wrap.classList.add('diag-active');
+    backdrop.classList.add('open');
+    document.body.classList.add('diag-open');
+  }
+
+  function wrapDiagrams(){
+    var pres = document.querySelectorAll('pre.mermaid');
+    pres.forEach(function(pre){
+      if (pre.closest('.diagram-wrap')) return;
+      var sectionTitleEl = pre.closest('section.sec');
+      var titleText = 'Diagram';
+      if (sectionTitleEl){
+        var h2 = sectionTitleEl.querySelector('h2');
+        if (h2) titleText = h2.textContent;
+      }
+
+      var wrap = document.createElement('div');
+      wrap.className = 'diagram-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'expand-btn';
+      btn.innerHTML = '&#10021; Expand';
+      wrap.appendChild(btn);
+
+      var toolbar = document.createElement('div');
+      toolbar.className = 'diag-toolbar';
+      toolbar.innerHTML =
+        '<span class="diag-title"></span><div class="spacer"></div>' +
+        '<button type="button" data-act="out" title="Zoom out">&minus;</button>' +
+        '<button type="button" data-act="reset" title="Reset zoom">&#8634;</button>' +
+        '<button type="button" data-act="in" title="Zoom in">+</button>' +
+        '<button type="button" class="close-btn" data-act="close">Close ✕</button>';
+      toolbar.querySelector('.diag-title').textContent = titleText;
+      wrap.insertBefore(toolbar, wrap.firstChild);
+
+      toolbar.addEventListener('click', function(e){
+        var act = e.target.getAttribute('data-act');
+        if (!act) return;
+        if (act === 'close') closeDiagram();
+        if (act === 'in'){ zoom = Math.min(zoom + 0.25, 5); applyZoom(pre); }
+        if (act === 'out'){ zoom = Math.max(zoom - 0.25, 0.4); applyZoom(pre); }
+        if (act === 'reset'){ zoom = 1.5; applyZoom(pre); }
+      });
+
+      function openHandler(e){
+        if (wrap.classList.contains('diag-active')) return;
+        e.stopPropagation();
+        openDiagram(wrap, pre);
+      }
+      btn.addEventListener('click', openHandler);
+      pre.addEventListener('click', openHandler);
+    });
+  }
+
+  wrapDiagrams();
+  var scanTries = 0;
+  var scanTimer = setInterval(function(){
+    wrapDiagrams();
+    if (++scanTries > 20) clearInterval(scanTimer);
+  }, 300);
+
+  backdrop.addEventListener('click', closeDiagram);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && activeWrap) closeDiagram(); });
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('#tocNav a'));
+  var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  function onScroll(){
+    var pos = window.scrollY + 120;
+    var current = sections[0];
+    for (var i=0;i<sections.length;i++){
+      if (sections[i].offsetTop <= pos) current = sections[i];
+    }
+    links.forEach(function(a){ a.classList.remove('active'); });
+    var idx = sections.indexOf(current);
+    if (idx > -1) links[idx].classList.add('active');
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+  links.forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var target = document.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+})();
+</script>
+</body>
+</html>
